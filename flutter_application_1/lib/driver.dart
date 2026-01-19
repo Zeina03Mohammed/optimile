@@ -205,19 +205,22 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ------------------ SEARCH ------------------
   void _searchAndAddStop() async {
-    final query = _searchController.text.trim();
-    if (query.isEmpty) return;
+  final query = _searchController.text.trim();
+  if (query.isEmpty) return;
 
-    FocusScope.of(context).unfocus();
+  FocusScope.of(context).unfocus(); // hide keyboard
 
-    final latLng = await directionsRepo.getCoordinates(query);
-    if (latLng != null) {
-      _addStop(latLng);
-      _mapController.animateCamera(CameraUpdate.newLatLngZoom(latLng, 14));
-    }
-
-    setState(() => _showSearchBar = false);
+  final latLng = await directionsRepo.getCoordinates(query);
+  if (latLng != null) {
+    _addStop(latLng);
+    _mapController.animateCamera(
+      CameraUpdate.newLatLngZoom(latLng, 17), // zoomed in more
+    );
   }
+
+  setState(() => _showSearchBar = false); // hide search after Go
+}
+
 
   void _clearAll() {
     _stops.clear();
@@ -242,24 +245,34 @@ class _MapScreenState extends State<MapScreen> {
                 child: Text('Stops', style: TextStyle(fontSize: 24, color: Colors.white)),
               ),
               Expanded(
-                child: ListView.builder(
-                  itemCount: _stops.length,
-                  itemBuilder: (context, index) {
-                    final stop = _stops[index];
-                    return ListTile(
-                      leading: const Text('•', style: TextStyle(fontSize: 24, color: Colors.white)),
-                      title: Text(
-                        'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _removeStop(index),
-                      ),
-                    );
-                  },
-                ),
-              ),
+  child: ListView.builder(
+    itemCount: _stops.length,
+    itemBuilder: (context, index) {
+      final stop = _stops[index];
+      return ListTile(
+        leading: const Text('•', style: TextStyle(fontSize: 24, color: Colors.white)),
+        title: Text(
+          'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, '
+          '${stop.longitude.toStringAsFixed(4)}',
+          style: const TextStyle(color: Colors.white),
+        ),
+        onTap: () {
+          // Animate to this stop
+          _mapController.animateCamera(
+            CameraUpdate.newLatLngZoom(stop, 17), // zoom in
+          );
+          // Close the drawer after clicking
+          Navigator.of(context).pop();
+        },
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _removeStop(index),
+        ),
+      );
+    },
+  ),
+),
+
             ],
           ),
         ),
