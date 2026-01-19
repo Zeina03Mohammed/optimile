@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
-import 'admin.dart';
+import 'driver.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Driver Dashboard',
-      theme: ThemeData.dark(useMaterial3: true),
-      home: const AdminDashboard(),
+      title: 'Driver Map App',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: MapScreen(),
     );
   }
 }
