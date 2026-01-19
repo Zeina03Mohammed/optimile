@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'admin.dart';
 
 // Fake user database
 Map<String, String> users = {

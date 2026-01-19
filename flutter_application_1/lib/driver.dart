@@ -155,7 +155,7 @@ class _DriverMapTabState extends State<DriverMapTab> {
     }
 
     if (destination == null) {
-      destination = await geocodeWithGoogle(stopName!);
+      destination = await geocodeWithGoogle(stopName);
       if (destination == null) {
         _showError("Place not found");
         return;

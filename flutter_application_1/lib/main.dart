@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'driver.dart';
+import 'admin.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Driver Dashboard',
       theme: ThemeData.dark(useMaterial3: true),
-      home: const DriverMapTab(),
+      home: const AdminDashboard(),
     );
   }
 }
