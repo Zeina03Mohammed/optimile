@@ -137,37 +137,65 @@ def predict_leg_time(row_features):
 # 7. ROUTE COST FUNCTION
 # =========================
 
+
 def route_cost(route_df):
-    total_cost = 0
+    total_cost = 0.0
 
     for i in range(len(route_df) - 1):
 
         stop_a = route_df.iloc[i]
         stop_b = route_df.iloc[i + 1]
 
-        # distance between consecutive stops
+        # ---- Distance between consecutive stops (km) ----
         leg_distance = haversine(
             stop_a["Drop_Latitude"], stop_a["Drop_Longitude"],
             stop_b["Drop_Latitude"], stop_b["Drop_Longitude"]
         )
 
-        feature_row = stop_b[feature_cols].copy()
+
+        geo_minutes = (leg_distance / 40.0) * 60.0
+
+        # ---- Start with all-zero feature vector ----
+        feature_row = {col: 0 for col in feature_cols}
+
+        # ---- Fill numeric features ----
         feature_row["Distance_km"] = leg_distance
+        feature_row["hour"] = stop_b["hour"]
+        feature_row["dayofweek"] = stop_b["dayofweek"]
+        feature_row["Agent_Rating"] = stop_b["Agent_Rating"]
+        feature_row["Agent_Age"] = stop_b["Agent_Age"]
 
-        feature_row = pd.DataFrame([feature_row])
+        # ---- Copy one-hot categorical features directly ----
+        for col in feature_cols:
+            if col.startswith(("Weather_", "Traffic_", "Vehicle_", "Area_", "Category_")):
+                feature_row[col] = stop_b.get(col, 0)
 
-        predicted_time = cost_model.predict(feature_row)[0]
-        total_cost += predicted_time
+        feature_df = pd.DataFrame([feature_row])
+
+        ml_minutes = cost_model.predict(feature_df)[0]
+
+    
+        leg_cost = geo_minutes + 0.15 * ml_minutes
+
+        total_cost += leg_cost
 
     return total_cost
 
 
 
+
+
+
 # =========================
-# 8. ALNS-STYLE RE-OPTIMIZER
+# 8. ALNS-STYLE RE-OPTIMIZER (FIXED)
 # =========================
 
-def alns_optimize(route_df, iterations=500):
+def alns_optimize(route_df, iterations=2000):
+
+    # 🔒 Safety: ALNS needs enough stops
+    if len(route_df) < 4:
+        return route_df.copy(), route_cost(route_df)
+
     best_route = route_df.copy()
     best_cost = route_cost(best_route)
 
@@ -175,12 +203,12 @@ def alns_optimize(route_df, iterations=500):
 
         candidate = best_route.copy()
 
-        # ---- Destroy: remove a segment ----
-        i = random.randint(0, len(candidate) - 3)
-        j = random.randint(i + 1, min(i + 3, len(candidate) - 1))
+        # ---- Destroy: remove a larger random segment ----
+        destroy_size = random.randint(2, min(4, len(candidate) - 2))
+        i = random.randint(0, len(candidate) - destroy_size)
 
-        segment = candidate.iloc[i:j].copy()
-        candidate = candidate.drop(candidate.index[i:j]).reset_index(drop=True)
+        segment = candidate.iloc[i:i + destroy_size].copy()
+        candidate = candidate.drop(candidate.index[i:i + destroy_size]).reset_index(drop=True)
 
         # ---- Repair: insert segment elsewhere ----
         k = random.randint(0, len(candidate))
@@ -197,11 +225,17 @@ def alns_optimize(route_df, iterations=500):
     return best_route, best_cost
 
 
+
+
 # =========================
 # 9. DEMO: MULTI-STOP ROUTE
 # =========================
 
 # Simulate a driver with 8 stops
+# =========================
+# 9. DEMO: MULTI-STOP ROUTE
+# =========================
+
 sample_route = df.sample(8).copy()
 
 print("\n=== INITIAL ROUTE COST ===")
@@ -215,10 +249,10 @@ print("Optimized Cost:", best_cost)
 
 print("\n=== IMPROVEMENT ===")
 print("Saved Time (min):", initial_cost - best_cost)
+
 print("\n=== OPTIMIZED STOP ORDER ===")
 
 for i, row in best_route.reset_index(drop=True).iterrows():
-
     area_label = decode_one_hot("Area_", row)
 
     print(
@@ -228,3 +262,10 @@ for i, row in best_route.reset_index(drop=True).iterrows():
         f"Lon={row['Drop_Longitude']:.5f}, "
         f"Area={area_label}"
     )
+
+def optimize_route(route_df, iterations=300):
+    best_route, best_cost = alns_optimize(route_df, iterations)
+    return best_route, best_cost
+
+if __name__ == "__main__":
+    pass

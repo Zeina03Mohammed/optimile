@@ -5,6 +5,9 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 import 'map/places_service.dart';
 import 'map/env.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -86,9 +89,104 @@ class _MapScreenState extends State<MapScreen> {
     _stops.removeAt(index);
     _rebuildMap();
   }
+  // ================= OPTIMIZE ROUTE (CALL BACKEND) =================
+Future<void> _optimizeRoute() async {
+  if (_currentLocation == null || _stops.length < 2) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Add at least 2 stops to optimize")),
+    );
+    return;
+  }
+
+  final stopsPayload = _stops.asMap().entries.map((entry) {
+    final i = entry.key;
+    final stop = entry.value;
+
+    return {
+      "Order_ID": "STOP_${i + 1}", // ✅ REQUIRED BY BACKEND
+      "Drop_Latitude": stop.latitude,
+      "Drop_Longitude": stop.longitude,
+      "Store_Latitude": _currentLocation!.latitude,
+      "Store_Longitude": _currentLocation!.longitude,
+      "Agent_Rating": 4.5,
+      "Agent_Age": 30,
+      "Weather": "Sunny",
+      "Traffic": "Medium",
+      "Vehicle": "van",
+      "Area": "Urban",
+      "Category": "Electronics",
+      "hour": 8,
+      "dayofweek": 2,
+    };
+  }).toList();
+
+  final body = {
+    "stops": stopsPayload,
+  };
+
+  try {
+    final response = await http.post(
+      Uri.parse("http://10.0.2.2:8000/optimize"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+    print("RAW BACKEND RESPONSE: ${response.body}");
+
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      final List optimizedStops = data["optimized_route"];
+      final double initialCost = (data["initial_cost"] as num).toDouble();
+      final double optimizedCost = (data["optimized_cost"] as num).toDouble();
+      final double saved = initialCost - optimizedCost;
+
+      print("=== ROUTE COMPARISON ===");
+      print("Initial Cost: $initialCost");
+      print("Optimized Cost: $optimizedCost");
+      print("Saved Time: $saved minutes");
+
+      // 🔁 Rebuild stops list in optimized order
+      _stops.clear();
+      setState(() {
+      _stops.clear();
+
+      for (final stop in optimizedStops) {
+          _stops.add(
+          LatLng(
+            stop["Drop_Latitude"],
+           stop["Drop_Longitude"],
+           ),
+         );
+       }
+    });
+
+      // 🔄 Force map redraw with new order
+      _rebuildMap();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Route optimized successfully")),
+      );
+    } else {
+      debugPrint("Optimization failed: ${response.body}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Optimization failed")),
+      );
+    }
+  } catch (e) {
+    debugPrint("Optimization error: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Server error during optimization")),
+    );
+  }
+}
+
+
+
 
   // ================= REBUILD MAP =================
   void _rebuildMap() async {
+    print("🔄 Rebuilding map with ${_stops.length} stops");
     _markers.removeWhere((m) => m.markerId.value != 'start');
     _polylines.clear();
     _distance = '';
@@ -123,6 +221,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     setState(() {});
+    
   }
 
   // ================= SELECT SUGGESTION =================
@@ -250,10 +349,23 @@ class _MapScreenState extends State<MapScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _goToCurrentLocation,
-        child: const Icon(Icons.my_location),
-      ),
+      floatingActionButton: Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    FloatingActionButton(
+      onPressed: _goToCurrentLocation,
+      heroTag: "locate",
+      child: const Icon(Icons.my_location),
+    ),
+    const SizedBox(height: 10),
+    FloatingActionButton.extended(
+      onPressed: _optimizeRoute,
+      heroTag: "optimize",
+      label: const Text("Optimize"),
+      icon: const Icon(Icons.auto_graph),
+    ),
+  ],
+),
     );
   }
 }
