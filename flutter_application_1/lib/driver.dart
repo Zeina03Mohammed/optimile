@@ -89,25 +89,50 @@ class _MapScreenState extends State<MapScreen> {
     _stops.removeAt(index);
     _rebuildMap();
   }
-  // ================= OPTIMIZE ROUTE (CALL BACKEND) =================
+  // ================= OPTIMIZE =================
+
 Future<void> _optimizeRoute() async {
-  if (_currentLocation == null || _stops.length < 2) {
+  if (_stops.length < 2) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Add at least 2 stops to optimize")),
+      const SnackBar(content: Text("Add at least two stops")),
     );
     return;
   }
 
-  final stopsPayload = _stops.asMap().entries.map((entry) {
-    final i = entry.key;
-    final stop = entry.value;
+  print("🔍 Stops before optimize: ${_stops.length}");
+  for (var s in _stops) {
+    print("Stop: ${s.latitude}, ${s.longitude}");
+  }
 
+  // ==============================
+  // 1. CALCULATE REAL ETA (BEFORE)
+  // ==============================
+  double initialTotalMinutes = 0;
+  LatLng? origin = _currentLocation;
+
+  for (var stop in _stops) {
+    if (origin != null) {
+      final route = await _placesService.getDirections(origin, stop);
+      if (route != null) {
+        final seconds = route["legs"][0]["duration"]["value"];
+        initialTotalMinutes += seconds / 60.0;
+      }
+    }
+    origin = stop;
+  }
+
+  print("⏱ Initial REAL ETA: ${initialTotalMinutes.toStringAsFixed(1)} min");
+
+  // ==============================
+  // 2. SEND STOPS TO BACKEND
+  // ==============================
+  final stopsPayload = _stops.map((s) {
     return {
-      "Order_ID": "STOP_${i + 1}", // ✅ REQUIRED BY BACKEND
-      "Drop_Latitude": stop.latitude,
-      "Drop_Longitude": stop.longitude,
-      "Store_Latitude": _currentLocation!.latitude,
-      "Store_Longitude": _currentLocation!.longitude,
+      "Order_ID": "STOP_${_stops.indexOf(s) + 1}",
+      "Drop_Latitude": s.latitude,
+      "Drop_Longitude": s.longitude,
+      "Store_Latitude": _currentLocation?.latitude ?? s.latitude,
+      "Store_Longitude": _currentLocation?.longitude ?? s.longitude,
       "Agent_Rating": 4.5,
       "Agent_Age": 30,
       "Weather": "Sunny",
@@ -115,71 +140,90 @@ Future<void> _optimizeRoute() async {
       "Vehicle": "van",
       "Area": "Urban",
       "Category": "Electronics",
-      "hour": 8,
-      "dayofweek": 2,
+      "hour": DateTime.now().hour,
+      "dayofweek": DateTime.now().weekday % 7
     };
   }).toList();
 
-  final body = {
-    "stops": stopsPayload,
-  };
+  final body = {"stops": stopsPayload};
 
   try {
     final response = await http.post(
-      Uri.parse("http://10.0.2.2:8000/optimize"),
+      Uri.parse("http://127.0.0.1:8000/optimize"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(body),
     );
+
     print("RAW BACKEND RESPONSE: ${response.body}");
 
+    final data = jsonDecode(response.body);
+    final optimizedRoute = data["optimized_route"] as List<dynamic>;
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+    // ==============================
+    // 3. BUILD NEW STOP LIST
+    // ==============================
+    final List<LatLng> newStops = [];
 
-      final List optimizedStops = data["optimized_route"];
-      final double initialCost = (data["initial_cost"] as num).toDouble();
-      final double optimizedCost = (data["optimized_cost"] as num).toDouble();
-      final double saved = initialCost - optimizedCost;
-
-      print("=== ROUTE COMPARISON ===");
-      print("Initial Cost: $initialCost");
-      print("Optimized Cost: $optimizedCost");
-      print("Saved Time: $saved minutes");
-
-      // 🔁 Rebuild stops list in optimized order
-      _stops.clear();
-      setState(() {
-      _stops.clear();
-
-      for (final stop in optimizedStops) {
-          _stops.add(
-          LatLng(
-            stop["Drop_Latitude"],
-           stop["Drop_Longitude"],
-           ),
-         );
-       }
-    });
-
-      // 🔄 Force map redraw with new order
-      _rebuildMap();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Route optimized successfully")),
-      );
-    } else {
-      debugPrint("Optimization failed: ${response.body}");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Optimization failed")),
+    for (var stop in optimizedRoute) {
+      newStops.add(
+        LatLng(
+          stop["Drop_Latitude"],
+          stop["Drop_Longitude"],
+        ),
       );
     }
-  } catch (e) {
-    debugPrint("Optimization error: $e");
+
+    // ==============================
+    // 4. CALCULATE REAL ETA (AFTER)
+    // ==============================
+    double optimizedTotalMinutes = 0;
+    origin = _currentLocation;
+
+    for (var stop in newStops) {
+      if (origin != null) {
+        final route = await _placesService.getDirections(origin, stop);
+        if (route != null) {
+          final seconds = route["legs"][0]["duration"]["value"];
+          optimizedTotalMinutes += seconds / 60.0;
+        }
+      }
+      origin = stop;
+    }
+
+    print("⏱ Optimized REAL ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min");
+    print("💡 Time Saved: ${(initialTotalMinutes - optimizedTotalMinutes).toStringAsFixed(1)} min");
+
+    // ==============================
+    // 5. APPLY OPTIMIZED ROUTE
+    // ==============================
+    setState(() {
+      _stops
+        ..clear()
+        ..addAll(newStops);
+    });
+
+    _rebuildMap();
+
+    // ==============================
+    // 6. SHOW RESULT TO USER
+    // ==============================
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Server error during optimization")),
+      SnackBar(
+        content: Text(
+          "Initial ETA: ${initialTotalMinutes.toStringAsFixed(1)} min\n"
+          "Optimized ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min\n"
+          "Saved: ${(initialTotalMinutes - optimizedTotalMinutes).toStringAsFixed(1)} min",
+        ),
+        duration: const Duration(seconds: 6),
+      ),
     );
+
+  } catch (e) {
+    print("Optimization error: $e");
   }
 }
+
+
 
 
 
@@ -358,12 +402,11 @@ Future<void> _optimizeRoute() async {
       child: const Icon(Icons.my_location),
     ),
     const SizedBox(height: 10),
-    FloatingActionButton.extended(
+    FloatingActionButton(
       onPressed: _optimizeRoute,
-      heroTag: "optimize",
-      label: const Text("Optimize"),
-      icon: const Icon(Icons.auto_graph),
+      child: const Icon(Icons.route),
     ),
+
   ],
 ),
     );

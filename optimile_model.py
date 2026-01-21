@@ -86,10 +86,13 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 model = GradientBoostingRegressor(
-    n_estimators=300,
-    learning_rate=0.05,
-    max_depth=4,
-    random_state=42
+     n_estimators=600,
+        learning_rate=0.03,
+        max_depth=5,
+        subsample=0.9,
+        min_samples_split=4,
+        min_samples_leaf=2,
+        random_state=42
 )
 cost_model = model
 
@@ -227,11 +230,6 @@ def alns_optimize(route_df, iterations=2000):
 
 
 
-# =========================
-# 9. DEMO: MULTI-STOP ROUTE
-# =========================
-
-# Simulate a driver with 8 stops
 # =========================
 # 9. DEMO: MULTI-STOP ROUTE
 # =========================
