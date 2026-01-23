@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'map/places_service.dart';
 import 'map/env.dart';
@@ -218,11 +220,62 @@ Future<void> _optimizeRoute() async {
       ),
     );
 
+    // ==============================
+    // 7. SAVE DELIVERY TO FIRESTORE
+    // ==============================
+    await _saveDeliveryToFirestore(
+      initialTotalMinutes,
+      optimizedTotalMinutes,
+      newStops,
+    );
+
   } catch (e) {
     print("Optimization error: $e");
   }
 }
 
+// ================= SAVE TO FIRESTORE =================
+Future<void> _saveDeliveryToFirestore(
+  double initialEta,
+  double optimizedEta,
+  List<LatLng> stops,
+) async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Convert stops to a list of maps
+    final stopsData = stops
+        .asMap()
+        .entries
+        .map((entry) => {
+              'sequence': entry.key + 1,
+              'latitude': entry.value.latitude,
+              'longitude': entry.value.longitude,
+            })
+        .toList();
+
+    // Save to Firestore
+    await FirebaseFirestore.instance.collection('deliveries').add({
+      'driverId': user.uid,
+      'driverEmail': user.email,
+      'stops': stopsData,
+      'initialEta': initialEta,
+      'optimizedEta': optimizedEta,
+      'timeSaved': initialEta - optimizedEta,
+      'status': 'completed',
+      'createdAt': FieldValue.serverTimestamp(),
+      'startLocation': {
+        'latitude': _currentLocation?.latitude,
+        'longitude': _currentLocation?.longitude,
+      }
+    });
+
+    print("✅ Delivery saved to Firestore");
+  } catch (e) {
+    print("❌ Error saving to Firestore: $e");
+  }
+}
 
 
 
