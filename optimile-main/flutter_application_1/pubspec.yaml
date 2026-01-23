@@ -1,0 +1,32 @@
+name: flutter_application_1
+description: A Flutter Maps & Directions project
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+ 
+  http: ^1.1.0
+  flutter_typeahead: ^5.2.0 
+  # Google Maps
+  google_maps_flutter: ^2.5.0
+
+  # Polyline decoding (Directions)
+  flutter_polyline_points: ^2.0.0
+  geolocator: ^14.0.2
+  uuid: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
