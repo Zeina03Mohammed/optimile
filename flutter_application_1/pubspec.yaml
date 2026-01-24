@@ -16,12 +16,12 @@ dependencies:
   flutter_typeahead: ^5.2.0 
   # Google Maps
   google_maps_flutter: ^2.5.0
-
+  
+  sensors_plus: ^3.0.1 
   # Polyline decoding (Directions)
   flutter_polyline_points: ^2.0.0
   geolocator: ^14.0.2
   uuid: ^4.4.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
