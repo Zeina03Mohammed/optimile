@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
 
 import 'map/places_service.dart';
 import 'map/env.dart';
@@ -244,37 +245,84 @@ Future<void> _saveDeliveryToFirestore(
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Convert stops to a list of maps
-    final stopsData = stops
-        .asMap()
-        .entries
-        .map((entry) => {
-              'sequence': entry.key + 1,
-              'latitude': entry.value.latitude,
-              'longitude': entry.value.longitude,
-            })
-        .toList();
+    final firestore = FirebaseFirestore.instance;
 
-    // Save to Firestore
-    await FirebaseFirestore.instance.collection('deliveries').add({
-      'driverId': user.uid,
-      'driverEmail': user.email,
-      'stops': stopsData,
-      'initialEta': initialEta,
-      'optimizedEta': optimizedEta,
-      'timeSaved': initialEta - optimizedEta,
+    // Calculate total distance (sum of all leg distances)
+    double totalDistance = 0;
+    for (int i = 0; i < stops.length - 1; i++) {
+      totalDistance += _calculateDistance(stops[i], stops[i + 1]);
+    }
+
+    // 1. Create main delivery document
+    final deliveryRef = await firestore.collection('deliveries').add({
+      'driver_id': user.uid,
+      'driver_email': user.email,
       'status': 'completed',
-      'createdAt': FieldValue.serverTimestamp(),
-      'startLocation': {
-        'latitude': _currentLocation?.latitude,
-        'longitude': _currentLocation?.longitude,
+      'created_at': FieldValue.serverTimestamp(),
+      'started_at': FieldValue.serverTimestamp(),
+      'completed_at': FieldValue.serverTimestamp(),
+      'total_distance': totalDistance,
+      'vehicle_id': null, // Can be updated later if vehicle info is added
+    });
+
+    // 2. Add stops as subcollection
+    final batch = firestore.batch();
+
+    for (int i = 0; i < stops.length; i++) {
+      final stopRef = deliveryRef.collection('stops').doc();
+      batch.set(stopRef, {
+        'address': 'Location ${i + 1}', // TODO: Reverse geocode to get actual address
+        'latitude': stops[i].latitude,
+        'longitude': stops[i].longitude,
+        'sequence_order': i + 1,
+        'estimated_time': 0, // Can be calculated from route data
+        'actual_time': null,
+        'status': 'completed',
+        'metadata': {
+          'customer_name': '',
+          'notes': '',
+          'phone': '',
+        }
+      });
+    }
+
+    // 3. Add route optimization data as subcollection
+    final routeRef = deliveryRef.collection('routes').doc();
+    batch.set(routeRef, {
+      'original_cost': initialEta,
+      'optimized_cost': optimizedEta,
+      'time_saved': initialEta - optimizedEta,
+      'created_at': FieldValue.serverTimestamp(),
+      'optimization_data': {
+        'algorithm': 'ALNS',
+        'iterations': 300,
+        'route_order': List.generate(stops.length, (i) => i + 1),
       }
     });
 
-    print("✅ Delivery saved to Firestore");
+    await batch.commit();
+
+    print("✅ Delivery saved to Firestore with ID: ${deliveryRef.id}");
+    print("   - ${stops.length} stops saved");
+    print("   - Route optimization data saved");
   } catch (e) {
     print("❌ Error saving to Firestore: $e");
   }
+}
+
+// Helper function to calculate distance between two LatLng points (in km)
+double _calculateDistance(LatLng from, LatLng to) {
+  const R = 6371.0; // Earth radius in km
+  final lat1 = from.latitude * 3.141592653589793 / 180;
+  final lat2 = to.latitude * 3.141592653589793 / 180;
+  final dLat = (to.latitude - from.latitude) * 3.141592653589793 / 180;
+  final dLon = (to.longitude - from.longitude) * 3.141592653589793 / 180;
+
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(lat1) * math.cos(lat2) * math.sin(dLon / 2) * math.sin(dLon / 2);
+  final c = 2 * math.asin(math.sqrt(a));
+
+  return R * c;
 }
 
 

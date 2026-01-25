@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version:*)",
+      "Bash(uvicorn:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(where:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(git checkout:*)",
+      "Bash(git remote set-url:*)"
+    ]
+  }
+}
