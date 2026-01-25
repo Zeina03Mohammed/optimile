@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -38,6 +39,14 @@ class AdminDashboard extends StatelessWidget {
         title: const Text('Admin Dashboard'),
         backgroundColor: primaryBlue,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
       ),
       backgroundColor: Colors.grey.shade100,
       body: SingleChildScrollView(

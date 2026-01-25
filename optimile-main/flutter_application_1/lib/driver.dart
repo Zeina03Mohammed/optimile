@@ -581,25 +581,40 @@ double _calculateDistance(LatLng from, LatLng to) {
       endDrawer: Drawer(
         child: Container(
           color: Colors.black,
-          child: ListView.builder(
-            itemCount: _stops.length,
-            itemBuilder: (context, index) {
-              final stop = _stops[index];
-              return ListTile(
-                leading: const Text('•', style: TextStyle(color: Colors.white)),
-                title: Text(
-                  _stopTitles[stop] ?? 'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
-                  style: const TextStyle(color: Colors.white),
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _stops.length,
+                  itemBuilder: (context, index) {
+                    final stop = _stops[index];
+                    return ListTile(
+                      leading: const Text('•', style: TextStyle(color: Colors.white)),
+                      title: Text(
+                        _stopTitles[stop] ?? 'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      onTap: () => _mapController.animateCamera(
+                        CameraUpdate.newLatLngZoom(stop, 15),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _removeStop(index),
+                      ),
+                    );
+                  },
                 ),
-                onTap: () => _mapController.animateCamera(
-                  CameraUpdate.newLatLngZoom(stop, 15),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _removeStop(index),
-                ),
-              );
-            },
+              ),
+              Divider(color: Colors.grey.shade600),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.white),
+                title: const Text('Logout', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
           ),
         ),
       ),
