@@ -1,128 +1,212 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-class AdminDashboard extends StatefulWidget {
+class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
 
   @override
-  State<AdminDashboard> createState() => _AdminDashboardState();
-}
-
-class _AdminDashboardState extends State<AdminDashboard> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _pages = [
-    const DashboardOverview(),
-    const DriversManagement(),
-    const DeliveriesManagement(),
-    const VehiclesManagement(),
-  ];
-
-  @override
   Widget build(BuildContext context) {
+    Map<String, int> statistics = {
+      'Total Deliveries': 120,
+      'Active Deliveries': 18,
+      'Completed': 95,
+      'Failed': 7,
+      'Active Drivers': 3,
+    };
+
+    List<Map<String, String>> drivers = [
+      {'name': 'Driver 1', 'status': 'On Delivery'},
+      {'name': 'Driver 2', 'status': 'Active'},
+      {'name': 'Driver 3', 'status': 'Offline'},
+    ];
+
+    Color getStatusColor(String status) {
+      switch (status) {
+        case 'On Delivery':
+          return Colors.orange;
+        case 'Active':
+          return Colors.green;
+        default:
+          return Colors.grey;
+      }
+    }
+
+    const primaryBlue = Color(0xFF2196F3);
+    const darkText = Color.fromARGB(255, 227, 228, 230);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Optimile Admin Dashboard'),
-        backgroundColor: Colors.blue.shade700,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              Navigator.of(context).pushReplacementNamed('/');
-            },
-          ),
-        ],
+        title: const Text('Admin Dashboard'),
+        backgroundColor: primaryBlue,
+        surfaceTintColor: Colors.transparent,
       ),
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            labelType: NavigationRailLabelType.all,
-            backgroundColor: Colors.blue.shade50,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: Text('Dashboard'),
+      backgroundColor: Colors.grey.shade100,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Operational Overview',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(255, 7, 7, 7),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.people_outlined),
-                selectedIcon: Icon(Icons.people),
-                label: Text('Drivers'),
+            ),
+            const SizedBox(height: 12),
+
+            // Stats Grid
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: statistics.entries.map((entry) {
+                return Container(
+                  width: MediaQuery.of(context).size.width / 2.2,
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 18,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.key,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: darkText,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            entry.value.toString(),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: primaryBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 22),
+            Divider(color: Colors.grey.shade300),
+            const SizedBox(height: 10),
+
+            // Drivers Panel
+            const Text(
+              'Driver Status',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(255, 10, 10, 10),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.local_shipping_outlined),
-                selectedIcon: Icon(Icons.local_shipping),
-                label: Text('Deliveries'),
+            ),
+            const SizedBox(height: 10),
+
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: drivers.length,
+              itemBuilder: (context, index) {
+                var d = drivers[index];
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ListTile(
+                    leading: Icon(Icons.person, color: primaryBlue),
+                    title: Text(
+                      d['name']!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: darkText,
+                      ),
+                    ),
+                    trailing: Text(
+                      d['status']!,
+                      style: TextStyle(
+                        color: getStatusColor(d['status']!),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 22),
+            Divider(color: Colors.grey.shade300),
+            const SizedBox(height: 10),
+
+            // Analytics Preview
+            const Text(
+              'Analytics (Preview)',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(255, 11, 11, 11),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.directions_car_outlined),
-                selectedIcon: Icon(Icons.directions_car),
-                label: Text('Vehicles'),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: _pages[_selectedIndex],
-          ),
-        ],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('• Peak delivery hours: 2 PM – 6 PM'),
+                    Text('• Fastest zone: Nasr City'),
+                    Text('• Delays mainly in: Downtown'),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 22),
+
+            // Map Placeholder
+            const Text(
+              'Live Tracking',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(255, 0, 0, 0),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 160,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.grey.shade400,
+              ),
+              child: const Center(
+                child: Text(
+                  'Map Placeholder',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-// Continue with the rest of the admin dashboard code...
-// (I'll create it in parts to avoid hitting token limits)
-
-class DashboardOverview extends StatelessWidget {
-  const DashboardOverview({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Dashboard Overview - Coming Soon'),
-    );
-  }
-}
-
-class DriversManagement extends StatelessWidget {
-  const DriversManagement({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Drivers Management - Coming Soon'),
-    );
-  }
-}
-
-class DeliveriesManagement extends StatelessWidget {
-  const DeliveriesManagement({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Deliveries Management - Coming Soon'),
-    );
-  }
-}
-
-class VehiclesManagement extends StatelessWidget {
-  const VehiclesManagement({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Vehicles Management - Coming Soon'),
     );
   }
 }

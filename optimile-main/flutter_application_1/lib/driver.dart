@@ -1,15 +1,27 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
+import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math' as math;
 
 import 'map/places_service.dart';
 import 'map/env.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+
+class _Stop {
+  final LatLng latLng;
+  final String title;
+
+  _Stop({
+    required this.latLng,
+    required this.title,
+  });
+}
 
 
 class MapScreen extends StatefulWidget {
@@ -23,19 +35,28 @@ class _MapScreenState extends State<MapScreen> {
   late GoogleMapController _mapController;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late PlacesService _placesService;
+  final Map<LatLng, String> _stopTitles = {};
 
   LatLng? _currentLocation;
+  LatLng? _liveLocation;
+
   final List<LatLng> _stops = [];
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
 
+
   String _distance = '';
   String _duration = '';
-
   bool _showSearchBar = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+
+
+  bool _navigationStarted = false;
+  int _currentStopIndex = 0;
+
+  StreamSubscription<Position>? _positionStream;
 
   static final CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(Env.defaultLat, Env.defaultLng),
@@ -46,7 +67,12 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _placesService = PlacesService();
-    _goToCurrentLocation();
+  }
+
+  @override
+  void dispose() {
+    _positionStream?.cancel();
+    super.dispose();
   }
 
   // ================= CURRENT LOCATION =================
@@ -62,37 +88,75 @@ class _MapScreenState extends State<MapScreen> {
         permission == LocationPermission.denied) return;
 
     final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-
-    final latLng = LatLng(pos.latitude, pos.longitude);
-
-    setState(() {
-      _currentLocation = latLng;
-      _markers.clear();
-      _markers.add(Marker(
-        markerId: const MarkerId('start'),
-        position: latLng,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      ));
-    });
-
-    _mapController.animateCamera(
-      CameraUpdate.newLatLngZoom(latLng, 15),
+      desiredAccuracy: LocationAccuracy.high,
     );
-    _rebuildMap();
+
+    _currentLocation = LatLng(pos.latitude, pos.longitude);
+
+    _markers
+      ..clear()
+      ..add(
+        Marker(
+          markerId: const MarkerId('start'),
+          position: _currentLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+        ),
+      );
+
+    await _mapController.animateCamera(
+      CameraUpdate.newLatLngZoom(_currentLocation!, 15),
+    );
+
+    setState(() {});
   }
 
-  // ================= ADD / REMOVE STOPS =================
+Future<void> _selectSuggestion(Place place) async {
+  final latLng =
+      await _placesService.getCoordinatesFromPlaceId(place.placeId);
+
+  if (latLng != null) {
+    _stops.add(latLng);
+
+    // Store title
+    _stopTitles[latLng] = place.description;
+
+    _rebuildMap();
+    _mapController.animateCamera(CameraUpdate.newLatLngZoom(latLng, 15));
+  }
+
+  _placesService.resetSession();
+  _searchController.clear();
+  FocusScope.of(context).unfocus();
+
+  setState(() {
+    _showSearchBar = false;
+  });
+}
+
+
+
+
+  // ================= ADD STOP =================
   void _addStop(LatLng point) {
+    if (_navigationStarted) return;
+
     _stops.add(point);
     _rebuildMap();
   }
 
+  // ================= REMOVE STOP =================
   void _removeStop(int index) {
+    if (_navigationStarted) return;
+
+    final stopToRemove = _stops[index];
     _stops.removeAt(index);
+    _stopTitles.remove(stopToRemove);
     _rebuildMap();
   }
-  // ================= OPTIMIZE =================
+
+   // ================= OPTIMIZE =================
 
 Future<void> _optimizeRoute() async {
   if (_stops.length < 2) {
@@ -271,7 +335,7 @@ Future<void> _saveDeliveryToFirestore(
     for (int i = 0; i < stops.length; i++) {
       final stopRef = deliveryRef.collection('stops').doc();
       batch.set(stopRef, {
-        'address': 'Location ${i + 1}', // TODO: Reverse geocode to get actual address
+        'address': _stopTitles[stops[i]] ?? 'Location ${i + 1}',
         'latitude': stops[i].latitude,
         'longitude': stops[i].longitude,
         'sequence_order': i + 1,
@@ -328,61 +392,186 @@ double _calculateDistance(LatLng from, LatLng to) {
 
 
 
+  // ================= START RIDE =================
+  void _startRide() {
+    if (_stops.isEmpty || _currentLocation == null) return;
 
-  // ================= REBUILD MAP =================
-  void _rebuildMap() async {
-    print("🔄 Rebuilding map with ${_stops.length} stops");
-    _markers.removeWhere((m) => m.markerId.value != 'start');
-    _polylines.clear();
-    _distance = '';
-    _duration = '';
+    setState(() {
+      _navigationStarted = true;
+      _currentStopIndex = 0;
+    });
 
-    LatLng? origin = _currentLocation;
+    _positionStream?.cancel();
 
-    for (int i = 0; i < _stops.length; i++) {
-      final destination = _stops[i];
-      _markers.add(Marker(markerId: MarkerId('stop_$i'), position: destination));
+    _positionStream = Geolocator.getPositionStream(
+  locationSettings: const LocationSettings(
+    accuracy: LocationAccuracy.bestForNavigation,
+    distanceFilter: 5,
+  ),
+).listen((pos) async {
+  _liveLocation = LatLng(pos.latitude, pos.longitude);
+  _currentLocation = _liveLocation;
 
-      if (origin != null) {
-        final route = await _placesService.getDirections(origin, destination);
-        if (route != null) {
-          final points = _placesService.decodePolyline(
-              route['overview_polyline']['points']);
-          _polylines.add(Polyline(
-            polylineId: PolylineId('route_$i'),
-            points: points,
-            width: 5,
-            color: Colors.blue,
-          ));
+  final destination = _stops[_currentStopIndex];
 
-          if (i == _stops.length - 1) {
-            _distance = route['legs'][0]['distance']['text'];
-            _duration = route['legs'][0]['duration']['text'];
-          }
-        }
-      }
+  // Update start marker
+  setState(() {
+    _markers.removeWhere((m) => m.markerId.value == 'start');
+    _markers.add(
+      Marker(
+        markerId: const MarkerId('start'),
+        position: _liveLocation!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          BitmapDescriptor.hueGreen,
+        ),
+      ),
+    );
+  });
 
-      origin = destination;
+  final distanceToStop = Geolocator.distanceBetween(
+    _liveLocation!.latitude,
+    _liveLocation!.longitude,
+    destination.latitude,
+    destination.longitude,
+  );
+
+  // ARRIVED
+  if (distanceToStop < 30) {
+    _polylines.removeWhere(
+      (p) => p.polylineId.value == 'route_$_currentStopIndex',
+    );
+
+    if (_currentStopIndex < _stops.length - 1) {
+      _currentStopIndex++;
+    } else {
+      _stopRide(completed: true);
+      return;
     }
-
-    setState(() {});
-    
   }
 
-  // ================= SELECT SUGGESTION =================
-  Future<void> _selectSuggestion(Place place) async {
-    final latLng = await _placesService.getCoordinatesFromPlaceId(place.placeId);
-    if (latLng != null) {
-      _addStop(latLng);
-      _mapController.animateCamera(CameraUpdate.newLatLngZoom(latLng, 15));
-    }
-    _placesService.resetSession();
-    _searchController.clear();
-    FocusScope.of(context).unfocus();
+  final route =
+      await _placesService.getDirections(_liveLocation!, destination);
+
+  if (route != null) {
+    final points = _placesService.decodePolyline(
+      route['overview_polyline']['points'],
+    );
+
     setState(() {
-      _showSearchBar = false;
+      _polylines.removeWhere((p) => p.polylineId.value == 'live_route');
+
+      _polylines.add(
+        Polyline(
+          polylineId: const PolylineId('live_route'),
+          points: points,
+          width: 6,
+          color: Colors.blue,
+        ),
+      );
+
+      _distance = route['legs'][0]['distance']['text'];
+      _duration = route['legs'][0]['duration']['text'];
     });
   }
+
+  _mapController.animateCamera(
+    CameraUpdate.newCameraPosition(
+      CameraPosition(
+        target: _liveLocation!,
+        zoom: 20,
+        tilt: 45,
+        bearing: pos.heading,
+      ),
+    ),
+  );
+});
+
+  }
+
+  // ================= STOP / EXIT =================
+  Future<void> _stopRide({bool completed = false}) async {
+    await _positionStream?.cancel();
+    _positionStream = null;
+
+    setState(() {
+      _navigationStarted = false;
+      _stops.clear();
+      _stopTitles.clear();
+      _polylines.clear();
+      _distance = '';
+      _duration = '';
+    });
+
+    if (_currentLocation != null) {
+      await _mapController.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentLocation!, 18),
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(completed ? "Ride completed 🎉" : "Ride exited"),
+      ),
+    );
+
+    _rebuildMap();
+  }
+
+  // ================= REBUILD MAP =================
+   void _rebuildMap() async {
+  if (_navigationStarted) return;
+
+  _markers.removeWhere((m) => m.markerId.value != 'start');
+  _polylines.clear();
+
+  LatLng? origin = _currentLocation;
+
+  for (int i = 0; i < _stops.length; i++) {
+    final LatLng stop = _stops[i];
+
+    // MARKER
+    _markers.add(
+      Marker(
+        markerId: MarkerId('stop_$i'),
+        position: stop,
+        infoWindow: InfoWindow(
+          title: _stopTitles[stop] ?? 'Stop ${i + 1}',
+        ),
+      ),
+    );
+
+    // ROUTE + ETA (FROM LAST PIN, NOT CURRENT LOCATION)
+    if (origin != null) {
+      final route = await _placesService.getDirections(origin, stop);
+
+      if (route != null) {
+        _polylines.add(
+          Polyline(
+            polylineId: PolylineId('route_$i'),
+            points: _placesService.decodePolyline(
+              route['overview_polyline']['points'],
+            ),
+            width: 5,
+            color: Colors.blue,
+          ),
+        );
+
+        // show total ETA to FINAL stop
+        if (i == _stops.length - 1) {
+          _distance = route['legs'][0]['distance']['text'];
+          _duration = route['legs'][0]['duration']['text'];
+        }
+      }
+    }
+
+    origin = stop;
+  }
+
+  setState(() {});
+}
+
+
+
 
   // ================= UI =================
   @override
@@ -399,7 +588,7 @@ double _calculateDistance(LatLng from, LatLng to) {
               return ListTile(
                 leading: const Text('•', style: TextStyle(color: Colors.white)),
                 title: Text(
-                  'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
+                  _stopTitles[stop] ?? 'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
                   style: const TextStyle(color: Colors.white),
                 ),
                 onTap: () => _mapController.animateCamera(
@@ -421,12 +610,13 @@ double _calculateDistance(LatLng from, LatLng to) {
             markers: _markers,
             polylines: _polylines,
             myLocationEnabled: true,
-            onMapCreated: (c) => _mapController = c,
+            onMapCreated: (c) {
+              _mapController = c;
+              _goToCurrentLocation();
+            },
             onTap: _addStop,
           ),
-
-          // 🔍 SEARCH BAR TOGGLE
-          Positioned(
+           Positioned(
             top: 10 + MediaQuery.of(context).padding.top,
             left: 15,
             right: 15,
@@ -443,7 +633,7 @@ double _calculateDistance(LatLng from, LatLng to) {
       title: Text(place.description),
     );
   },
-  onSelected: _selectSuggestion, // ✅ Corrected
+  onSelected: _selectSuggestion,
   builder: (context, controller, focusNode) {
     _searchController.value = controller.value;
     return TextField(
@@ -476,40 +666,91 @@ double _calculateDistance(LatLng from, LatLng to) {
                   ),
           ),
 
-          // 🧭 Distance / ETA Display
-          if (_distance.isNotEmpty && _duration.isNotEmpty)
+          // BOTTOM CARD
+          if (_stops.isNotEmpty || _navigationStarted)
             Positioned(
               bottom: 20,
-              left: 20,
-              right: 20,
+              left: 16,
+              right: 16,
               child: Container(
-                padding: const EdgeInsets.all(12),
-                color: Colors.white,
-                child: Text(
-                  'Distance: $_distance | Duration: $_duration',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 10,
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_duration.isNotEmpty)
+                      Text(
+                        _duration,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    if (_distance.isNotEmpty)
+                      Text(
+                        _distance,
+                        style: TextStyle(color: Colors.grey.shade700),
+                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        if (!_navigationStarted)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _startRide,
+                              child: const Text("Start"),
+                            ),
+                          ),
+                        if (!_navigationStarted) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: _optimizeRoute,
+                            icon: const Icon(Icons.route),
+                          ),
+                        ],
+                        if (_navigationStarted)
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => _stopRide(),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text("Exit"),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
         ],
       ),
-      floatingActionButton: Column(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    FloatingActionButton(
-      onPressed: _goToCurrentLocation,
-      heroTag: "locate",
-      child: const Icon(Icons.my_location),
-    ),
-    const SizedBox(height: 10),
-    FloatingActionButton(
-      onPressed: _optimizeRoute,
-      child: const Icon(Icons.route),
-    ),
-
-  ],
-),
+      floatingActionButton: !_navigationStarted ? Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            onPressed: _goToCurrentLocation,
+            heroTag: "locate",
+            child: const Icon(Icons.my_location),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+            heroTag: "menu",
+            child: const Icon(Icons.menu),
+          ),
+        ],
+      ) : null,
     );
   }
 }
