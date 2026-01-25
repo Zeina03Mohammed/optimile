@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,20 +8,8 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'map/places_service.dart';
 import 'map/env.dart';
-
-class _Stop {
-  final LatLng latLng;
-  final String title;
-
-  _Stop({
-    required this.latLng,
-    required this.title,
-  });
-}
-
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -36,6 +23,7 @@ class _MapScreenState extends State<MapScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late PlacesService _placesService;
   final Map<LatLng, String> _stopTitles = {};
+String? _activeDeliveryId;
 
   LatLng? _currentLocation;
   LatLng? _liveLocation;
@@ -43,7 +31,7 @@ class _MapScreenState extends State<MapScreen> {
   final List<LatLng> _stops = [];
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
-
+  String _routeStatus = 'idle'; 
 
   String _distance = '';
   String _duration = '';
@@ -135,9 +123,6 @@ Future<void> _selectSuggestion(Place place) async {
   });
 }
 
-
-
-
   // ================= ADD STOP =================
   void _addStop(LatLng point) {
     if (_navigationStarted) return;
@@ -157,7 +142,6 @@ Future<void> _selectSuggestion(Place place) async {
   }
 
    // ================= OPTIMIZE =================
-
 Future<void> _optimizeRoute() async {
   if (_stops.length < 2) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -216,7 +200,7 @@ Future<void> _optimizeRoute() async {
 
   try {
     final response = await http.post(
-      Uri.parse("http://127.0.0.1:8000/optimize"),
+      Uri.parse("http://192.168.1.13:8000/optimize"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(body),
     );
@@ -305,6 +289,8 @@ Future<void> _saveDeliveryToFirestore(
   double optimizedEta,
   List<LatLng> stops,
 ) async {
+  print("🚀 _saveDeliveryToFirestore CALLED");
+
   try {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -319,15 +305,19 @@ Future<void> _saveDeliveryToFirestore(
 
     // 1. Create main delivery document
     final deliveryRef = await firestore.collection('deliveries').add({
-      'driver_id': user.uid,
-      'driver_email': user.email,
-      'status': 'completed',
-      'created_at': FieldValue.serverTimestamp(),
-      'started_at': FieldValue.serverTimestamp(),
-      'completed_at': FieldValue.serverTimestamp(),
-      'total_distance': totalDistance,
-      'vehicle_id': null, // Can be updated later if vehicle info is added
-    });
+  'driver_id': user.uid,
+  'driver_email': user.email,
+  'status': 'pending', // ✅ NOT completed
+  'created_at': FieldValue.serverTimestamp(),
+  'started_at': null,
+  'completed_at': null,
+  'total_distance': totalDistance,
+  'vehicle_id': null,
+});
+
+_activeDeliveryId = deliveryRef.id; // 🔥 STORE ID
+
+print("✅ Delivery document created");
 
     // 2. Add stops as subcollection
     final batch = firestore.batch();
@@ -374,9 +364,8 @@ Future<void> _saveDeliveryToFirestore(
   }
 }
 
-// Helper function to calculate distance between two LatLng points (in km)
 double _calculateDistance(LatLng from, LatLng to) {
-  const R = 6371.0; // Earth radius in km
+  const R = 6371.0; 
   final lat1 = from.latitude * 3.141592653589793 / 180;
   final lat2 = to.latitude * 3.141592653589793 / 180;
   final dLat = (to.latitude - from.latitude) * 3.141592653589793 / 180;
@@ -389,22 +378,24 @@ double _calculateDistance(LatLng from, LatLng to) {
   return R * c;
 }
 
-
-
-
   // ================= START RIDE =================
   void _startRide() {
     if (_stops.isEmpty || _currentLocation == null) return;
-
+ if (_activeDeliveryId == null) {
+    print("❌ Cannot start ride: no delivery ID. Save delivery first!");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Please save the delivery first")),
+    );
+    return;
+  }
     setState(() {
-      _navigationStarted = true;
-      _currentStopIndex = 0;
-    });
-
+    _navigationStarted = true;
+    _routeStatus = 'active';
+    _currentStopIndex = 0;
+  });
     _positionStream?.cancel();
-
     _positionStream = Geolocator.getPositionStream(
-  locationSettings: const LocationSettings(
+    locationSettings: const LocationSettings(
     accuracy: LocationAccuracy.bestForNavigation,
     distanceFilter: 5,
   ),
@@ -414,7 +405,6 @@ double _calculateDistance(LatLng from, LatLng to) {
 
   final destination = _stops[_currentStopIndex];
 
-  // Update start marker
   setState(() {
     _markers.removeWhere((m) => m.markerId.value == 'start');
     _markers.add(
@@ -427,6 +417,15 @@ double _calculateDistance(LatLng from, LatLng to) {
       ),
     );
   });
+  if (_activeDeliveryId != null) {
+  await FirebaseFirestore.instance
+      .collection('deliveries')
+      .doc(_activeDeliveryId)
+      .update({
+    'status': 'active',
+    'started_at': FieldValue.serverTimestamp(),
+  });
+}
 
   final distanceToStop = Geolocator.distanceBetween(
     _liveLocation!.latitude,
@@ -487,35 +486,73 @@ double _calculateDistance(LatLng from, LatLng to) {
 });
 
   }
+Future<void> _updateRouteStatusInFirestore(String status) async {
+  if (_activeDeliveryId == null) {
+    print("❌ No active delivery ID");
+    return;
+  }
+
+  try {
+    await FirebaseFirestore.instance
+        .collection('deliveries')
+        .doc(_activeDeliveryId)
+        .update({
+      'status': status,
+      if (status == 'completed')
+        'completed_at': FieldValue.serverTimestamp(),
+    });
+
+    print("✅ Firestore updated: status = $status");
+  } catch (e) {
+    print("❌ Failed to update route status: $e");
+  }
+}
 
   // ================= STOP / EXIT =================
   Future<void> _stopRide({bool completed = false}) async {
-    await _positionStream?.cancel();
-    _positionStream = null;
+  await _positionStream?.cancel();
+  _positionStream = null;
 
-    setState(() {
-      _navigationStarted = false;
-      _stops.clear();
-      _stopTitles.clear();
-      _polylines.clear();
-      _distance = '';
-      _duration = '';
-    });
+  setState(() {
+    _navigationStarted = false;
+    _routeStatus = 'done'; // ✅ THIS IS THE KEY
+    _distance = '';
+    _duration = '';
+  });
 
-    if (_currentLocation != null) {
-      await _mapController.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentLocation!, 18),
-      );
-    }
+  // 🔥 Persist status to Firestore
+  await _updateRouteStatusInFirestore(
+    completed ? 'completed' : 'done',
+  );
+  final snap = await FirebaseFirestore.instance
+    .collection('deliveries')
+    .doc(_activeDeliveryId)
+    .get();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(completed ? "Ride completed 🎉" : "Ride exited"),
-      ),
+print("🔥 DB CONFIRM STATUS: ${snap['status']}");
+
+
+  if (_currentLocation != null) {
+    await _mapController.animateCamera(
+      CameraUpdate.newLatLngZoom(_currentLocation!, 18),
     );
-
-    _rebuildMap();
   }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        completed ? "Route completed 🎉" : "Route marked as done",
+      ),
+    ),
+  );
+
+  // Optional: keep stops visible after done
+  _rebuildMap();
+}
+
+
+
+
 
   // ================= REBUILD MAP =================
    void _rebuildMap() async {
@@ -571,6 +608,12 @@ double _calculateDistance(LatLng from, LatLng to) {
 }
 
 
+String _stopStatus(int index) {
+  if (!_navigationStarted) return 'pending';
+  if (index < _currentStopIndex) return 'completed';
+  if (index == _currentStopIndex) return 'current';
+  return 'pending';
+}
 
 
   // ================= UI =================
@@ -583,28 +626,142 @@ double _calculateDistance(LatLng from, LatLng to) {
           color: Colors.black,
           child: Column(
             children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _stops.length,
-                  itemBuilder: (context, index) {
-                    final stop = _stops[index];
-                    return ListTile(
-                      leading: const Text('•', style: TextStyle(color: Colors.white)),
-                      title: Text(
-                        _stopTitles[stop] ?? 'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      onTap: () => _mapController.animateCamera(
-                        CameraUpdate.newLatLngZoom(stop, 15),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _removeStop(index),
-                      ),
-                    );
-                  },
+             Expanded(
+  child: (!_navigationStarted && _routeStatus != 'done')
+
+      // ================= BEFORE START =================
+      ? ListView.builder(
+          itemCount: _stops.length,
+          itemBuilder: (context, index) {
+            final stop = _stops[index];
+            return ListTile(
+              leading: const Text('•', style: TextStyle(color: Colors.white)),
+              title: Text(
+                _stopTitles[stop] ??
+                    'Stop ${index + 1}: ${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
+                style: const TextStyle(color: Colors.white),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _removeStop(index),
+              ),
+            );
+          },
+        )
+        // ================= AFTER DONE =================
+: (_routeStatus == 'done')
+    ? Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text(
+                  "Route Completed",
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: ListView.builder(
+              itemCount: _stops.length,
+              itemBuilder: (context, index) {
+                final stop = _stops[index];
+
+                return ListTile(
+                  leading: const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                  ),
+                  title: Text(
+                    _stopTitles[stop] ?? 'Stop ${index + 1}',
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                  subtitle: const Text(
+                    'DONE',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                  onTap: () => _mapController.animateCamera(
+                    CameraUpdate.newLatLngZoom(stop, 16),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      )
+
+
+      // ================= AFTER START =================
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                "Active Route",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+
+            Expanded(
+              child: ListView.builder(
+                itemCount: _stops.length,
+                itemBuilder: (context, index) {
+                  final stop = _stops[index];
+                  final status = _stopStatus(index);
+
+                  Color color;
+                  IconData icon;
+
+                  switch (status) {
+                    case 'completed':
+                      color = Colors.green;
+                      icon = Icons.check_circle;
+                      break;
+                    case 'current':
+                      color = Colors.blue;
+                      icon = Icons.navigation;
+                      break;
+                    default:
+                      color = Colors.grey;
+                      icon = Icons.radio_button_unchecked;
+                  }
+
+                  return ListTile(
+                    leading: Icon(icon, color: color),
+                    title: Text(
+                      _stopTitles[stop] ?? 'Stop ${index + 1}',
+                      style: TextStyle(color: color),
+                    ),
+                    subtitle: Text(
+                      status.toUpperCase(),
+                      style: TextStyle(color: color, fontSize: 12),
+                    ),
+                    onTap: () => _mapController.animateCamera(
+                      CameraUpdate.newLatLngZoom(stop, 16),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+),
+
               Divider(color: Colors.grey.shade600),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.white),
@@ -631,6 +788,19 @@ double _calculateDistance(LatLng from, LatLng to) {
             },
             onTap: _addStop,
           ),
+
+          Positioned(
+  top: 10 + MediaQuery.of(context).padding.top,
+  left: 15,
+  child: FloatingActionButton(
+    mini: true,
+    heroTag: "menu",
+    backgroundColor: Colors.white,
+    onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+    child: const Icon(Icons.menu, color: Colors.black),
+  ),
+),
+
            Positioned(
             top: 10 + MediaQuery.of(context).padding.top,
             left: 15,
@@ -670,7 +840,7 @@ double _calculateDistance(LatLng from, LatLng to) {
                     alignment: Alignment.topRight,
                     child: IconButton(
                       icon: const Icon(Icons.search, size: 30),
-                      color: Colors.black,
+                      color: const Color.fromARGB(255, 0, 0, 0),
                       onPressed: () {
                         setState(() {
                           _showSearchBar = true;
@@ -682,90 +852,113 @@ double _calculateDistance(LatLng from, LatLng to) {
           ),
 
           // BOTTOM CARD
-          if (_stops.isNotEmpty || _navigationStarted)
-            Positioned(
-              bottom: 20,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 10,
-                    )
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_duration.isNotEmpty)
-                      Text(
-                        _duration,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    if (_distance.isNotEmpty)
-                      Text(
-                        _distance,
-                        style: TextStyle(color: Colors.grey.shade700),
-                      ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        if (!_navigationStarted)
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _startRide,
-                              child: const Text("Start"),
-                            ),
-                          ),
-                        if (!_navigationStarted) ...[
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _optimizeRoute,
-                            icon: const Icon(Icons.route),
-                          ),
-                        ],
-                        if (_navigationStarted)
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => _stopRide(),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                              ),
-                              child: const Text("Exit"),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          // ================= BOTTOM CARD =================
+if (_stops.isNotEmpty || _navigationStarted)
+  Positioned(
+    bottom: 20,
+    left: 16,
+    right: 16,
+    child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.15),
+            blurRadius: 10,
+          )
         ],
       ),
-      floatingActionButton: !_navigationStarted ? Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FloatingActionButton(
-            onPressed: _goToCurrentLocation,
-            heroTag: "locate",
-            child: const Icon(Icons.my_location),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-            heroTag: "menu",
-            child: const Icon(Icons.menu),
+          // ETA / Duration
+          if (_duration.isNotEmpty)
+            Text(
+              _duration,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          if (_distance.isNotEmpty)
+            Text(
+              _distance,
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          const SizedBox(height: 12),
+
+          // Buttons Row
+          Row(
+            children: [
+              if (!_navigationStarted) ...[
+                // Start Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      // ✅ Ensure delivery is saved before starting ride
+                      if (_activeDeliveryId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Saving delivery before starting..."),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+
+                        await _saveDeliveryToFirestore(
+                          0, // initial ETA placeholder
+                          0, // optimized ETA placeholder
+                          _stops,
+                        );
+                      }
+
+                      // Start the ride
+                      _startRide();
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text("Start"),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // Optimize Button
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: _optimizeRoute,
+                    icon: const Icon(Icons.route),
+                    label: const Text("Optimize"),
+                  ),
+                ),
+              ],
+
+              if (_navigationStarted)
+                // Exit Button
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _stopRide(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text("Exit"),
+                  ),
+                ),
+            ],
           ),
         ],
-      ) : null,
+      ),
+    ),
+  ),
+
+        ],
+      ),
+
     );
   }
 }
