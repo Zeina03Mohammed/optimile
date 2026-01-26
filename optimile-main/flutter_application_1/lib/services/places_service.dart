@@ -2,50 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'env.dart';
-
-/// =================== MODELS ===================
-
-class Place {
-  final String placeId;
-  final String description;
-
-  Place({required this.placeId, required this.description});
-}
-
-class Review {
-  final String authorName;
-  final String text;
-  final double rating;
-
-  Review({required this.authorName, required this.text, required this.rating});
-}
-
-class PlaceDetails {
-  final String name;
-  final String address;
-  final List<String> photos;
-  final List<Review> reviews;
-  final String type;
-  final String status;
-
-  /// Compute average rating from reviews
-  double get rating {
-    if (reviews.isEmpty) return 0.0;
-    return reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
-  }
-
-  PlaceDetails({
-    required this.name,
-    required this.address,
-    required this.photos,
-    this.reviews = const [],
-    this.type = 'Unknown',
-    this.status = 'Unknown',
-  });
-}
-
-/// =================== SERVICE ===================
+import '/env.dart';
+import '../models/stop_model.dart'; 
 
 class PlacesService {
   final String apiKey;
@@ -94,64 +52,54 @@ class PlacesService {
 
   /// ================= GET PLACE DETAILS (INCLUDING PHOTOS, REVIEWS, TYPE, STATUS) =================
   Future<PlaceDetails?> getPlaceDetailsFromPlaceId(String placeId) async {
-  final url =
-      'https://maps.googleapis.com/maps/api/place/details/json'
-      '?place_id=$placeId'
-      '&fields=name,vicinity,photos,rating,business_status,types,reviews'
-      '&key=$apiKey';
+    final url =
+        'https://maps.googleapis.com/maps/api/place/details/json'
+        '?place_id=$placeId'
+        '&fields=name,vicinity,geometry,photos,rating,business_status,types,reviews'
+        '&key=$apiKey';
 
-  final response = await http.get(Uri.parse(url));
-  if (response.statusCode != 200) return null;
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) return null;
 
-  final data = json.decode(response.body);
-  if (data['status'] != 'OK' || data['result'] == null) return null;
+    final data = json.decode(response.body);
+    if (data['status'] != 'OK' || data['result'] == null) return null;
 
-  final place = data['result'];
+    final place = data['result'];
 
-  // Photos
-  final photos = <String>[];
-  if (place['photos'] != null) {
-    for (var p in place['photos']) {
-      photos.add(
-        'https://maps.googleapis.com/maps/api/place/photo'
-        '?maxwidth=400&photoreference=${p['photo_reference']}&key=$apiKey',
-      );
+    // Location
+    final loc = place['geometry'] != null
+        ? LatLng(place['geometry']['location']['lat'], place['geometry']['location']['lng'])
+        : LatLng(0, 0);
+
+    // Photos
+    final photos = <String>[];
+    if (place['photos'] != null) {
+      for (var p in place['photos']) {
+        photos.add(
+          'https://maps.googleapis.com/maps/api/place/photo'
+          '?maxwidth=400&photoreference=${p['photo_reference']}&key=$apiKey',
+        );
+      }
     }
-  }
 
-  // Reviews
-  List<Review> reviews = [];
-  if (place['reviews'] != null) {
-    for (var r in place['reviews']) {
-      reviews.add(Review(
-        authorName: r['author_name'] ?? 'Anonymous',
-        text: r['text'] ?? '',
-        rating: (r['rating'] != null) ? r['rating'].toDouble() : 0.0,
-      ));
+
+    // Type
+    String type = 'Unknown';
+    if (place['types'] != null && place['types'].isNotEmpty) {
+      type = place['types'][0];
     }
+
+    // Status
+    String status = place['business_status'] ?? 'Unknown';
+
+    return PlaceDetails(
+      name: place['name'] ?? 'Unknown',
+      address: place['vicinity'] ?? 'No address',
+      location: loc,
+      type: type,
+      status: status,
+    );
   }
-
-  // Type
-  String type = 'Unknown';
-  if (place['types'] != null && place['types'].isNotEmpty) {
-    type = place['types'][0];
-  }
-
-  // Status
-  String status = place['business_status'] ?? 'Unknown';
-
-  // Rating
-
-  return PlaceDetails(
-    name: place['name'] ?? 'Unknown',
-    address: place['vicinity'] ?? 'No address',
-    photos: photos,
-    reviews: reviews,
-    type: type,
-    status: status,
-  );
-}
-
 
   /// ================= GET DIRECTIONS =================
   Future<Map<String, dynamic>?> getDirections(

@@ -1,46 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'firebase_options.dart';
+import '/viewmodel/authvm.dart';
+import '/view/login.dart';
+import '/view/map_screen.dart';
+import '/view/admin.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
-import 'login&signup.dart';
-import 'driver.dart';
-import 'admin.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Optimile - Delivery Route Optimizer',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: AuthWrapper(),
+      home: const AuthWrapper(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show loading while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // If user is logged in
         if (snapshot.hasData && snapshot.data != null) {
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
@@ -59,18 +70,16 @@ class AuthWrapper extends StatelessWidget {
                 if (role == 'admin') {
                   return const AdminDashboard();
                 } else {
-                  return MapScreen();
+                  return const MapScreen();
                 }
               }
 
-              // If user data doesn't exist, logout and show login
               FirebaseAuth.instance.signOut();
               return const LoginPage();
             },
           );
         }
 
-        // User is not logged in
         return const LoginPage();
       },
     );
