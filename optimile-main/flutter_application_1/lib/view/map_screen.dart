@@ -31,7 +31,6 @@ class _MapView extends StatelessWidget {
       endDrawer: _buildDrawer(context, vm),
       body: Stack(
         children: [
-          // ================= MAP =================
           GoogleMap(
             initialCameraPosition: CameraPosition(
               target: LatLng(Env.defaultLat, Env.defaultLng),
@@ -41,10 +40,9 @@ class _MapView extends StatelessWidget {
             polylines: vm.polylines,
             myLocationEnabled: true,
             onMapCreated: (c) => vm.mapController = c,
-            onTap: (latLng) => vm.addStop(latLng), // now adds a Stop
+            onTap: (latLng) => vm.addStop(latLng),
           ),
 
-          // ================= MENU BUTTON =================
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 15,
@@ -58,7 +56,6 @@ class _MapView extends StatelessWidget {
             ),
           ),
 
-          // ================= SEARCH BAR =================
           if (vm.showSearchBar)
             Positioned(
               top: 40,
@@ -73,7 +70,7 @@ class _MapView extends StatelessWidget {
                   suggestionsCallback: vm.getSuggestions,
                   itemBuilder: (context, place) =>
                       ListTile(title: Text(place.description)),
-                  onSelected: vm.selectSuggestion, // adds as Stop internally
+                  onSelected: vm.selectSuggestion,
                   builder: (context, controller, focusNode) {
                     return TextField(
                       controller: controller,
@@ -94,7 +91,6 @@ class _MapView extends StatelessWidget {
               ),
             ),
 
-          // ================= SEARCH ICON =================
           if (!vm.showSearchBar)
             Positioned(
               top: 40,
@@ -106,7 +102,6 @@ class _MapView extends StatelessWidget {
               ),
             ),
 
-          // ================= BOTTOM CARD =================
           if (vm.stops.isNotEmpty || vm.navigationStarted)
             Positioned(
               bottom: 20,
@@ -144,72 +139,22 @@ class _MapView extends StatelessWidget {
                     Row(
                       children: [
                         if (!vm.navigationStarted) ...[
-                          // Start Button
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: () async {
-                                if (vm.activeDeliveryId == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          "Saving delivery before starting..."),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-
-                                  await vm.firestoreService.saveDeliveryToFirestore(
-                                    0,
-                                    0,
-                                    vm.stops.cast<Stop>(),
-                                    vm,
-                                  );
-                                }
-
+                                await vm.optimizeRoute(context);
                                 await vm.startRide(context);
                               },
                               icon: const Icon(Icons.play_arrow),
                               label: const Text("Start"),
-                              style: ElevatedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-
-                          // Optimize Button
-                          SizedBox(
-                            height: 48,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                if (vm.stops.length < 2) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                          "Add at least 2 stops to optimize."),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                await vm.optimizeRoute(context);
-                              },
-                              icon: const Icon(Icons.route),
-                              label: const Text("Optimize"),
                             ),
                           ),
                         ],
-
                         if (vm.navigationStarted)
-                          // Exit Button
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () async => await vm.stopRide(
-                                  completed: false, context: context),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                              ),
+                              onPressed: () async =>
+                                  await vm.stopRide(context: context),
                               child: const Text("Exit"),
                             ),
                           ),
@@ -224,7 +169,6 @@ class _MapView extends StatelessWidget {
     );
   }
 
-  // ================= DRAWER =================
   Drawer _buildDrawer(BuildContext context, MapVM vm) {
     return Drawer(
       child: Container(
@@ -242,7 +186,7 @@ class _MapView extends StatelessWidget {
                               style: TextStyle(color: Colors.white)),
                           title: Text(
                             vm.stopTitles[stop] ??
-                                'Stop ${index + 1}: ${stop.location.latitude.toStringAsFixed(4)}, ${stop.location.longitude.toStringAsFixed(4)}',
+                                'Stop ${index + 1}',
                             style: const TextStyle(color: Colors.white),
                           ),
                           trailing: IconButton(
@@ -252,119 +196,13 @@ class _MapView extends StatelessWidget {
                         );
                       },
                     )
-                  : (vm.routeStatus == 'done')
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.check_circle, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Route Completed",
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: vm.stops.length,
-                                itemBuilder: (context, index) {
-                                  final stop = vm.stops[index];
-                                  return ListTile(
-                                    leading: const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green,
-                                    ),
-                                    title: Text(
-                                      vm.stopTitles[stop] ??
-                                          'Stop ${index + 1}',
-                                      style: const TextStyle(color: Colors.green),
-                                    ),
-                                    subtitle: const Text(
-                                      'DONE',
-                                      style: TextStyle(
-                                          color: Colors.green, fontSize: 12),
-                                    ),
-                                    onTap: () => vm.mapController?.animateCamera(
-                                      CameraUpdate.newLatLngZoom(stop.location, 16),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text(
-                                "Active Route",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: vm.stops.length,
-                                itemBuilder: (context, index) {
-                                  final stop = vm.stops[index];
-                                  final status = vm.stopStatus(index);
-
-                                  Color color;
-                                  IconData icon;
-
-                                  switch (status) {
-                                    case 'completed':
-                                      color = Colors.green;
-                                      icon = Icons.check_circle;
-                                      break;
-                                    case 'current':
-                                      color = Colors.blue;
-                                      icon = Icons.navigation;
-                                      break;
-                                    default:
-                                      color = Colors.grey;
-                                      icon = Icons.radio_button_unchecked;
-                                  }
-
-                                  return ListTile(
-                                    leading: Icon(icon, color: color),
-                                    title: Text(
-                                      vm.stopTitles[stop] ??
-                                          'Stop ${index + 1}',
-                                      style: TextStyle(color: color),
-                                    ),
-                                    subtitle: Text(
-                                      status.toUpperCase(),
-                                      style: TextStyle(color: color, fontSize: 12),
-                                    ),
-                                    onTap: () => vm.mapController?.animateCamera(
-                                      CameraUpdate.newLatLngZoom(stop.location, 16),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+                  : Container(),
             ),
             const Divider(color: Colors.grey),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.white),
-              title: const Text('Logout', style: TextStyle(color: Colors.white)),
+              title: const Text('Logout',
+                  style: TextStyle(color: Colors.white)),
               onTap: () async {
                 await vm.logout(context);
               },

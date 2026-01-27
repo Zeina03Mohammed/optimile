@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -10,32 +9,42 @@ import '../services/firestore_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../view/login.dart';
-import '../models/stop_model.dart'; // <-- import Stop model
+import '../models/stop_model.dart';
 
 class MapVM extends ChangeNotifier {
   // ================= SERVICES =================
   final PlacesService _placesService = PlacesService();
   PlacesService get placesService => _placesService;
+
   final FirestoreService firestoreService = FirestoreService();
 
   // ================= MAP =================
   GoogleMapController? mapController;
   LatLng? currentLocation;
+  LatLng? _liveLocation;
+
   String? activeDeliveryId;
 
+  Timer? _deviationTimer;
+  Timer? _trafficTimer;
+  bool _isReoptimizing = false;
+  List<LatLng> _plannedRoutePoints = [];
+  DateTime? _lastReoptTime;
+
   // ================= ROUTE =================
-  final List<Stop> stops = []; // <-- now a list of Stop objects
-  final Map<Stop, String> stopTitles = {}; // <-- keys are Stop objects
+  final List<Stop> stops = [];
+  final Map<Stop, String> stopTitles = {};
   final Set<Marker> markers = {};
   final Set<Polyline> polylines = {};
 
   bool navigationStarted = false;
-  String routeStatus = 'idle'; // idle | navigating | done
+  String routeStatus = 'idle';
   String distance = '';
   String duration = '';
   int currentStopIndex = 0;
 
   StreamSubscription<Position>? positionStream;
+
   bool _showSearchBar = false;
   bool get showSearchBar => _showSearchBar;
 
@@ -45,19 +54,18 @@ class MapVM extends ChangeNotifier {
   @override
   void dispose() {
     positionStream?.cancel();
+    _deviationTimer?.cancel();
+    _trafficTimer?.cancel();
     super.dispose();
   }
 
+  // ================= SEARCH =================
   void openSearchBar() {
     _showSearchBar = true;
     notifyListeners();
     Future.delayed(const Duration(milliseconds: 100), () {
       FocusScope.of(searchFocusNode.context!).requestFocus(searchFocusNode);
     });
-  }
-
-  Future<List<Place>> getSuggestions(String query) {
-    return placesService.getSuggestions(query);
   }
 
   void closeSearchBar() {
@@ -67,9 +75,13 @@ class MapVM extends ChangeNotifier {
     searchFocusNode.unfocus();
   }
 
-  /// ================= SELECT PLACE / ADD STOP =================
+  Future<List<Place>> getSuggestions(String query) {
+    return _placesService.getSuggestions(query);
+  }
+
   Future<void> selectSuggestion(Place place) async {
-    final latLng = await placesService.getCoordinatesFromPlaceId(place.placeId);
+    final latLng =
+        await _placesService.getCoordinatesFromPlaceId(place.placeId);
 
     if (latLng != null) {
       final stop = Stop(location: latLng, title: place.description);
@@ -78,126 +90,9 @@ class MapVM extends ChangeNotifier {
       rebuildMap();
       mapController?.animateCamera(CameraUpdate.newLatLngZoom(latLng, 15));
     }
-    placesService.resetSession();
+
+    _placesService.resetSession();
     closeSearchBar();
-  }
-
-  // ================= OPTIMIZE =================
-  Future<void> optimizeRoute(BuildContext context) async {
-    if (stops.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Add at least two stops")),
-      );
-      return;
-    }
-
-    print("🔍 Stops before optimize: ${stops.length}");
-    for (var s in stops) {
-      print("Stop: ${s.location.latitude}, ${s.location.longitude}");
-    }
-
-    double initialTotalMinutes = 0;
-    LatLng? origin = currentLocation;
-
-    for (var stop in stops) {
-      if (origin != null) {
-        final route = await placesService.getDirections(origin, stop.location);
-        if (route != null) {
-          final seconds = route["legs"][0]["duration"]["value"];
-          initialTotalMinutes += seconds / 60.0;
-        }
-      }
-      origin = stop.location;
-    }
-
-    print("⏱ Initial REAL ETA: ${initialTotalMinutes.toStringAsFixed(1)} min");
-
-    final stopsPayload = stops.map((s) {
-      return {
-        "Order_ID": "STOP_${stops.indexOf(s) + 1}",
-        "Drop_Latitude": s.location.latitude,
-        "Drop_Longitude": s.location.longitude,
-        "Store_Latitude": currentLocation?.latitude ?? s.location.latitude,
-        "Store_Longitude": currentLocation?.longitude ?? s.location.longitude,
-        "Agent_Rating": 4.5,
-        "Agent_Age": 30,
-        "Weather": "Sunny",
-        "Traffic": "Medium",
-        "Vehicle": "van",
-        "Area": "Urban",
-        "Category": "Electronics",
-        "hour": DateTime.now().hour,
-        "dayofweek": DateTime.now().weekday % 7
-      };
-    }).toList();
-
-    final body = {"stops": stopsPayload};
-
-    try {
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/optimize"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
-
-      print("RAW BACKEND RESPONSE: ${response.body}");
-
-      final data = jsonDecode(response.body);
-      final optimizedRoute = data["optimized_route"] as List<dynamic>;
-
-      final List<Stop> newStops = optimizedRoute.map((stop) {
-        return Stop(
-          location: LatLng(stop["Drop_Latitude"], stop["Drop_Longitude"]),
-        );
-      }).toList();
-
-      double optimizedTotalMinutes = 0;
-      origin = currentLocation;
-
-      for (var stop in newStops) {
-        if (origin != null) {
-          final route = await placesService.getDirections(origin, stop.location);
-          if (route != null) {
-            optimizedTotalMinutes += route["legs"][0]["duration"]["value"] / 60.0;
-          }
-        }
-        origin = stop.location;
-      }
-
-      print("⏱ Optimized REAL ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min");
-      print("💡 Time Saved: ${(initialTotalMinutes - optimizedTotalMinutes).toStringAsFixed(1)} min");
-
-      stops
-        ..clear()
-        ..addAll(newStops);
-
-      await rebuildMap();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Initial ETA: ${initialTotalMinutes.toStringAsFixed(1)} min\n"
-           "Optimized ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min\n"
-  "Saved: ${(initialTotalMinutes - optimizedTotalMinutes).toStringAsFixed(1)} min",
-  textAlign: TextAlign.center,
-          ),
-          duration: const Duration(seconds: 6),
-        ),
-      );
-
-      if (activeDeliveryId == null) {
-        await firestoreService.saveDeliveryToFirestore(
-          initialTotalMinutes,
-          optimizedTotalMinutes,
-          stops.map((s) => s.location).cast<Stop>().toList(),
-          this,
-        );
-      }
-    } catch (e) {
-      print("Optimization error: $e");
-    }
-
-    notifyListeners();
   }
 
   // ================= LOCATION =================
@@ -251,6 +146,99 @@ class MapVM extends ChangeNotifier {
     rebuildMap();
   }
 
+  // ================= OPTIMIZE =================
+  Future<void> optimizeRoute(BuildContext context) async {
+    if (stops.length < 2 || currentLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Add at least two stops")),
+      );
+      return;
+    }
+
+    double initialTotalMinutes = 0;
+    LatLng? origin = currentLocation;
+
+    for (var stop in stops) {
+      if (origin != null) {
+        final route = await _placesService.getDirections(origin, stop.location);
+        if (route != null) {
+          final seconds = route["legs"][0]["duration"]["value"];
+          initialTotalMinutes += seconds / 60.0;
+        }
+      }
+      origin = stop.location;
+    }
+
+    final payload = {
+      "stops": stops
+          .map((s) => {"lat": s.location.latitude, "lng": s.location.longitude})
+          .toList(),
+      "vehicle": "Van",
+      "traffic": "Medium",
+      "weather": "Sunny"
+    };
+
+    try {
+      final response = await http.post(
+        Uri.parse("http://10.0.2.2:8000/optimize"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      final data = jsonDecode(response.body);
+      final optimizedRoute = data["optimized_route"] as List<dynamic>;
+
+      final List<Stop> newStops = optimizedRoute.map((s) {
+        return Stop(
+          location: LatLng(s["lat"], s["lng"]),
+        );
+      }).toList();
+
+      double optimizedTotalMinutes = 0;
+      origin = currentLocation;
+
+      for (var stop in newStops) {
+        if (origin != null) {
+          final route =
+              await _placesService.getDirections(origin, stop.location);
+          if (route != null) {
+            final seconds = route["legs"][0]["duration"]["value"];
+            optimizedTotalMinutes += seconds / 60.0;
+          }
+        }
+        origin = stop.location;
+      }
+
+      final saved =
+          math.max(initialTotalMinutes - optimizedTotalMinutes, 0);
+
+      stops
+        ..clear()
+        ..addAll(newStops);
+
+      rebuildMap();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Initial ETA: ${initialTotalMinutes.toStringAsFixed(1)} min\n"
+            "Optimized ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min\n"
+            "Saved: ${saved.toStringAsFixed(1)} min",
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+
+      await firestoreService.saveDeliveryToFirestore(
+        initialTotalMinutes,
+        optimizedTotalMinutes,
+        stops,
+      );
+    } catch (e) {
+      debugPrint("Optimization error: $e");
+    }
+  }
+
   // ================= REBUILD MAP =================
   Future<void> rebuildMap() async {
     if (navigationStarted) return;
@@ -263,23 +251,24 @@ class MapVM extends ChangeNotifier {
     for (int i = 0; i < stops.length; i++) {
       final Stop stop = stops[i];
 
-      // MARKER
       markers.add(
         Marker(
           markerId: MarkerId('stop_$i'),
           position: stop.location,
-          infoWindow: InfoWindow(title: stopTitles[stop] ?? stop.title ?? 'Stop ${i + 1}'),
+          infoWindow: InfoWindow(
+              title: stopTitles[stop] ?? stop.title ?? 'Stop ${i + 1}'),
         ),
       );
 
-      // POLYLINE
       if (origin != null) {
-        final route = await placesService.getDirections(origin, stop.location);
+        final route =
+            await _placesService.getDirections(origin, stop.location);
         if (route != null) {
           polylines.add(
             Polyline(
               polylineId: PolylineId('route_$i'),
-              points: placesService.decodePolyline(route['overview_polyline']['points']),
+              points: _placesService.decodePolyline(
+                  route['overview_polyline']['points']),
               width: 5,
               color: Colors.blue,
             ),
@@ -305,94 +294,96 @@ class MapVM extends ChangeNotifier {
     return 'pending';
   }
 
-  // ================= NAVIGATION =================
+  // ================= START RIDE =================
   Future<void> startRide(BuildContext context) async {
     if (stops.isEmpty || currentLocation == null) return;
 
     if (firestoreService.activeDeliveryId == null) {
-      print("❌ Cannot start ride: no delivery ID. Save delivery first!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please save the delivery first")),
+      );
       return;
     }
 
     navigationStarted = true;
     routeStatus = 'active';
     currentStopIndex = 0;
+    _plannedRoutePoints.clear();
+    notifyListeners();
 
     positionStream?.cancel();
+
     positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 5,
       ),
     ).listen((pos) async {
-      final liveLocation = LatLng(pos.latitude, pos.longitude);
-      currentLocation = liveLocation;
+      _liveLocation = LatLng(pos.latitude, pos.longitude);
+      currentLocation = _liveLocation;
 
       final destination = stops[currentStopIndex].location;
 
-      // Update marker
       markers.removeWhere((m) => m.markerId.value == 'start');
       markers.add(
         Marker(
           markerId: const MarkerId('start'),
-          position: liveLocation,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          position: _liveLocation!,
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         ),
       );
 
-      notifyListeners();
-
-      // Update Firestore status
-      if (firestoreService.activeDeliveryId != null) {
-        await firestoreService.updateRouteStatusInFirestore('active');
-      }
-
       final distanceToStop = Geolocator.distanceBetween(
-        liveLocation.latitude,
-        liveLocation.longitude,
+        _liveLocation!.latitude,
+        _liveLocation!.longitude,
         destination.latitude,
         destination.longitude,
       );
 
-      // ARRIVED
       if (distanceToStop < 30) {
-        polylines.removeWhere((p) => p.polylineId.value == 'route_$currentStopIndex');
+        _plannedRoutePoints.clear();
 
         if (currentStopIndex < stops.length - 1) {
           currentStopIndex++;
         } else {
-          stopRide(completed: true, context: context);
+          await stopRide(context: context, completed: true);
           return;
         }
       }
 
-      // Update live polyline
-      final route = await placesService.getDirections(liveLocation, destination);
+      if (_plannedRoutePoints.isEmpty && !_isReoptimizing) {
+        final route =
+            await _placesService.getDirections(currentLocation!, destination);
 
-      if (route != null) {
-        final points = placesService.decodePolyline(route['overview_polyline']['points']);
+        if (route != null) {
+          final points = _placesService.decodePolyline(
+              route['overview_polyline']['points']);
 
-        polylines.removeWhere((p) => p.polylineId.value == 'live_route');
-        polylines.add(
-          Polyline(
-            polylineId: const PolylineId('live_route'),
-            points: points,
-            width: 6,
-            color: Colors.blue,
-          ),
-        );
+          _plannedRoutePoints = List.from(points);
 
-        distance = route['legs'][0]['distance']['text'];
-        duration = route['legs'][0]['duration']['text'];
-        notifyListeners();
+          polylines.removeWhere(
+              (p) => p.polylineId.value == 'live_route');
+          polylines.add(
+            Polyline(
+              polylineId: const PolylineId('live_route'),
+              points: points,
+              width: 6,
+              color: Colors.blue,
+            ),
+          );
+
+          distance = route['legs'][0]['distance']['text'];
+          duration = route['legs'][0]['duration']['text'];
+          notifyListeners();
+        }
       }
 
-      // Move camera
       mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: liveLocation,
-            zoom: 20,
+            target: _liveLocation!,
+            zoom: 19,
             tilt: 45,
             bearing: pos.heading,
           ),
@@ -400,83 +391,182 @@ class MapVM extends ChangeNotifier {
       );
     });
 
+    startDeviationMonitor(context);
+    startTrafficMonitor(context);
+  }
+
+  // ================= STOP =================
+  Future<void> stopRide(
+      {bool completed = false, required BuildContext context}) async {
+    await positionStream?.cancel();
+    positionStream = null;
+
+    navigationStarted = false;
+    routeStatus = 'done';
+    distance = '';
+    duration = '';
     notifyListeners();
-  }
 
-// ================= STOP / EXIT =================
-Future<void> stopRide({bool completed = false, required BuildContext context}) async {
-  // Stop location stream
-  await positionStream?.cancel();
-  positionStream = null;
-
-  // Update state
-  navigationStarted = false;
-  routeStatus = 'done';
-  distance = '';
-  duration = '';
-
-  // Clear all stops and map visuals
-  stops.clear(); // remove all pinned locations
-  stopTitles.clear(); // clear stop names
-  markers.removeWhere((m) => m.markerId.value != 'start'); // keep current location marker
-  polylines.clear(); // remove all blue lines
-
-  notifyListeners();
-
-  // Update Firestore status
-  await firestoreService.updateRouteStatusInFirestore(
-    completed ? 'completed' : 'done',
-  );
-
-  // Optional: confirm in Firestore
-  if (firestoreService.activeDeliveryId != null) {
-    final snap = await FirebaseFirestore.instance
-        .collection('deliveries')
-        .doc(firestoreService.activeDeliveryId)
-        .get();
-    print("🔥 DB CONFIRM STATUS: ${snap['status']}");
-  }
-
-  // Animate camera to current location
-  if (currentLocation != null) {
-    await mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(currentLocation!, 18),
+    await firestoreService.updateRouteStatusInFirestore(
+      completed ? 'completed' : 'done',
     );
-  }
 
-  // Show feedback
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        completed ? "Route completed 🎉" : "Route marked as done",
+    if (currentLocation != null) {
+      await mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(currentLocation!, 18),
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content:
+            Text(completed ? "Route completed 🎉" : "Route marked as done"),
       ),
-    ),
-  );
+    );
 
-  // Rebuild map (will only show current location now)
-  await rebuildMap();
-}
-
-
-  // ================= UTILS =================
-  double calculateDistance(LatLng a, LatLng b) {
-    const R = 6371.0;
-    final dLat = (b.latitude - a.latitude) * math.pi / 180;
-    final dLon = (b.longitude - a.longitude) * math.pi / 180;
-
-    final aa = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(a.latitude * math.pi / 180) *
-            math.cos(b.latitude * math.pi / 180) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    return R * 2 * math.asin(math.sqrt(aa));
+    await rebuildMap();
   }
 
+  // ================= MONITORS =================
+  void startDeviationMonitor(BuildContext context) {
+    _deviationTimer?.cancel();
+
+    _deviationTimer =
+        Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!navigationStarted ||
+          _plannedRoutePoints.isEmpty ||
+          currentLocation == null ||
+          _isReoptimizing) return;
+
+      double minDist = double.infinity;
+
+      for (final p in _plannedRoutePoints) {
+        final d = Geolocator.distanceBetween(
+          currentLocation!.latitude,
+          currentLocation!.longitude,
+          p.latitude,
+          p.longitude,
+        );
+        if (d < minDist) minDist = d;
+      }
+
+      if (minDist > 40) {
+        _isReoptimizing = true;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("⚠ You are off route. Re-optimizing…"),
+          ),
+        );
+
+        await reoptimizeRoute("deviation");
+        _plannedRoutePoints.clear();
+        _isReoptimizing = false;
+      }
+    });
+  }
+
+  void startTrafficMonitor(BuildContext context) {
+    _trafficTimer?.cancel();
+
+    _trafficTimer =
+        Timer.periodic(const Duration(minutes: 1), (_) async {
+      if (!navigationStarted ||
+          currentLocation == null ||
+          stops.isEmpty ||
+          _isReoptimizing) return;
+
+      if (_lastReoptTime != null) {
+        final diff =
+            DateTime.now().difference(_lastReoptTime!).inSeconds;
+        if (diff < 90) return;
+      }
+
+      try {
+        final route = await _placesService.getDirections(
+          currentLocation!,
+          stops.first.location,
+        );
+
+        if (route == null) return;
+
+        final leg = route["legs"]?[0];
+        final normal = leg?["duration"]?["value"];
+        final traffic = leg?["duration_in_traffic"]?["value"];
+
+        if (normal == null || traffic == null) return;
+
+        final ratio = (traffic - normal) / normal;
+
+        if (ratio > 0.30) {
+          _isReoptimizing = true;
+          _lastReoptTime = DateTime.now();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("🚦 Heavy traffic detected. Re-optimizing..."),
+            ),
+          );
+
+          await reoptimizeRoute("traffic");
+          _isReoptimizing = false;
+        }
+      } catch (e) {
+        debugPrint("❌ Traffic monitor error: $e");
+        _isReoptimizing = false;
+      }
+    });
+  }
+
+  // ================= REOPTIMIZE =================
+  Future<void> reoptimizeRoute(String reason) async {
+    if (!navigationStarted || _isReoptimizing || stops.isEmpty) return;
+
+    _lastReoptTime = DateTime.now();
+
+    try {
+      final payload = {
+        "current_lat": currentLocation!.latitude,
+        "current_lng": currentLocation!.longitude,
+        "remaining_stops": stops
+            .map((s) =>
+                {"lat": s.location.latitude, "lng": s.location.longitude})
+            .toList(),
+        "vehicle": "Van",
+        "traffic": "High",
+        "weather": "Sunny",
+        "reason": reason
+      };
+
+      final response = await http.post(
+        Uri.parse("http://10.0.2.2:8000/reoptimize"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      final data = jsonDecode(response.body);
+      final optimizedRoute = data["optimized_route"];
+
+      final List<Stop> newStops = optimizedRoute.map<Stop>((s) {
+        return Stop(
+          location: LatLng(s["lat"], s["lng"]),
+        );
+      }).toList();
+
+      stops
+        ..clear()
+        ..addAll(newStops);
+
+      rebuildMap();
+    } catch (e) {
+      debugPrint("Re-optimization error: $e");
+    }
+  }
+
+  // ================= LOGOUT =================
   Future<void> logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();
-      print("User logged out");
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -484,7 +574,6 @@ Future<void> stopRide({bool completed = false, required BuildContext context}) a
         (route) => false,
       );
     } catch (e) {
-      print("Logout failed: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Logout failed: ${e.toString()}"),
