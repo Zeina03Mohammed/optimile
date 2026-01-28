@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,7 +7,6 @@ import '../services/places_service.dart';
 import '../services/firestore_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../view/login.dart';
 import '../models/stop_model.dart';
 
 class MapVM extends ChangeNotifier {
@@ -32,7 +30,7 @@ class MapVM extends ChangeNotifier {
   DateTime? _lastReoptTime;
 
   // ================= ROUTE =================
-  final List<Stop> stops = [];
+  List<Stop> stops = [];
   final Map<Stop, String> stopTitles = {};
   final Set<Marker> markers = {};
   final Set<Polyline> polylines = {};
@@ -241,8 +239,6 @@ class MapVM extends ChangeNotifier {
 
   // ================= REBUILD MAP =================
   Future<void> rebuildMap() async {
-    if (navigationStarted) return;
-
     markers.removeWhere((m) => m.markerId.value != 'start');
     polylines.clear();
 
@@ -287,23 +283,9 @@ class MapVM extends ChangeNotifier {
     notifyListeners();
   }
 
-  String stopStatus(int index) {
-    if (!navigationStarted) return 'pending';
-    if (index < currentStopIndex) return 'completed';
-    if (index == currentStopIndex) return 'current';
-    return 'pending';
-  }
-
   // ================= START RIDE =================
   Future<void> startRide(BuildContext context) async {
     if (stops.isEmpty || currentLocation == null) return;
-
-    if (firestoreService.activeDeliveryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please save the delivery first")),
-      );
-      return;
-    }
 
     navigationStarted = true;
     routeStatus = 'active';
@@ -396,20 +378,40 @@ class MapVM extends ChangeNotifier {
   }
 
   // ================= STOP =================
+
+void clearRoute({bool keepCurrentLocationMarker = true}) {
+  stops.clear();
+  stopTitles.clear();
+  polylines.clear();
+  _plannedRoutePoints.clear();
+
+  currentStopIndex = 0;
+  navigationStarted = false;
+  routeStatus = 'idle';
+  distance = '';
+  duration = '';
+
+  markers.removeWhere((m) {
+    if (keepCurrentLocationMarker) {
+      return m.markerId.value != 'start';
+    }
+    return true;
+  });
+
+  notifyListeners();
+}
+
   Future<void> stopRide(
       {bool completed = false, required BuildContext context}) async {
     await positionStream?.cancel();
     positionStream = null;
 
-    navigationStarted = false;
-    routeStatus = 'done';
-    distance = '';
-    duration = '';
-    notifyListeners();
 
     await firestoreService.updateRouteStatusInFirestore(
       completed ? 'completed' : 'done',
     );
+
+    clearRoute();
 
     if (currentLocation != null) {
       await mapController?.animateCamera(
@@ -563,23 +565,4 @@ class MapVM extends ChangeNotifier {
     }
   }
 
-  // ================= LOGOUT =================
-  Future<void> logout(BuildContext context) async {
-    try {
-      await FirebaseAuth.instance.signOut();
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Logout failed: ${e.toString()}"),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
-    }
-  }
 }

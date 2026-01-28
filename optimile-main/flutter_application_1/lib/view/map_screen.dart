@@ -169,47 +169,114 @@ class _MapView extends StatelessWidget {
     );
   }
 
-  Drawer _buildDrawer(BuildContext context, MapVM vm) {
-    return Drawer(
-      child: Container(
-        color: Colors.black,
-        child: Column(
-          children: [
-            Expanded(
-              child: (!vm.navigationStarted && vm.routeStatus != 'done')
-                  ? ListView.builder(
-                      itemCount: vm.stops.length,
-                      itemBuilder: (context, index) {
-                        final stop = vm.stops[index];
-                        return ListTile(
-                          leading: const Text('•',
-                              style: TextStyle(color: Colors.white)),
-                          title: Text(
-                            vm.stopTitles[stop] ??
-                                'Stop ${index + 1}',
-                            style: const TextStyle(color: Colors.white),
+ Drawer _buildDrawer(BuildContext context, MapVM vm) {
+  return Drawer(
+    child: Container(
+      color: Colors.black,
+      child: Column(
+        children: [
+          Expanded(
+            child: vm.stops.isNotEmpty
+                ? ListView(
+                    children: [
+                      Theme(
+                        data: Theme.of(context).copyWith(
+                          dividerColor: Colors.transparent,
+                        ),
+                        child: ExpansionTile(
+                          initiallyExpanded: true,
+                          title: Row(
+                            children: [
+                              const Text(
+                                'Current Route',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: vm.navigationStarted
+                                      ? Colors.blue
+                                      : Colors.grey,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  vm.navigationStarted ? 'ACTIVE' : 'IDLE',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => vm.removeStop(index),
-                          ),
-                        );
-                      },
-                    )
-                  : Container(),
+                          iconColor: Colors.white,
+                          collapsedIconColor: Colors.white,
+                          children: vm.stops.asMap().entries.map(
+                            (entry) {
+                              final index = entry.key;
+                              final stop = entry.value;
+
+                              Color color;
+                              if (vm.navigationStarted &&
+                                  index < vm.currentStopIndex) {
+                                color = Colors.green;
+                              } else if (vm.navigationStarted &&
+                                  index == vm.currentStopIndex) {
+                                color = Colors.blue;
+                              } else {
+                                color = Colors.orange;
+                              }
+
+                              return ListTile(
+                                leading: Icon(
+                                  Icons.location_on,
+                                  color: color,
+                                  size: 18,
+                                ),
+                                title: Text(
+                                  stop.title ?? 'Stop ${index + 1}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            },
+                          ).toList(),
+                        ),
+                      ),
+                    ],
+                  )
+                : const Center(
+                    child: Text(
+                      'No active route',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+          ),
+
+          const Divider(color: Colors.grey),
+          // LOGOUT
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.white),
+            title: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.white),
             ),
-            const Divider(color: Colors.grey),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.white),
-              title: const Text('Logout',
-                  style: TextStyle(color: Colors.white)),
-              onTap: () async {
-                await vm.logout(context);
-              },
-            ),
-          ],
-        ),
+            onTap: () async {
+    final authVM =
+        Provider.of<AuthViewModel>(context, listen: false);
+
+    await authVM.logout();
+            },
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
