@@ -7,7 +7,7 @@ class AuthViewModel extends ChangeNotifier {
 
   bool isLoading = false;
 
-  // 🔹 Optional cached driver
+  // Optional cached driver
   DeliveryDriver? currentDriver;
 
   void setLoading(bool value) {
@@ -20,7 +20,6 @@ class AuthViewModel extends ChangeNotifier {
     setLoading(true);
     final result = await _authService.login(email, password);
 
-    // 🔥 ADDED (non-breaking)
     if (result['driver'] != null) {
       currentDriver = result['driver'];
       notifyListeners();
@@ -30,12 +29,13 @@ class AuthViewModel extends ChangeNotifier {
     return result;
   }
 
-  // ================= SIGNUP =================
+  // ================= SIGNUP with Role =================
   Future<String?> signup({
     required String name,
     required String email,
     required String password,
     String? phone,
+    required String role, // 🔹 ADDED: Required role parameter
   }) async {
     setLoading(true);
     final result = await _authService.signup(
@@ -43,15 +43,43 @@ class AuthViewModel extends ChangeNotifier {
       email: email,
       password: password,
       phone: phone,
+      role: role, // 🔹 Pass role to service
     );
+    setLoading(false);
+    return result;
+  }
+
+  // ================= PASSWORD RESET =================
+  // 🔹 ADDED: Password reset method
+  Future<String?> resetPassword(String email) async {
+    setLoading(true);
+    final result = await _authService.resetPassword(email);
+    setLoading(false);
+    return result;
+  }
+
+  // ================= RESEND VERIFICATION EMAIL =================
+  // 🔹 ADDED: Resend verification email method
+  Future<String?> resendVerificationEmail() async {
+    setLoading(true);
+    final result = await _authService.resendVerificationEmail();
     setLoading(false);
     return result;
   }
 
   // ================= LOGOUT =================
   Future<void> logout() async {
-    currentDriver = null; // 🔹 clear cached driver
+    currentDriver = null;
     notifyListeners();
     await _authService.logout();
+  }
+
+  // ================= GET CURRENT DRIVER =================
+  Future<void> loadCurrentDriver() async {
+    final driver = await _authService.getCurrentDriver();
+    if (driver != null) {
+      currentDriver = driver;
+      notifyListeners();
+    }
   }
 }
