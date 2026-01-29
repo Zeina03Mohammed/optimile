@@ -79,7 +79,7 @@ class AuthService {
     required String email,
     required String password,
     String? phone,
-    required String role, // Made required to avoid confusion
+    required String role,
   }) async {
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       return 'Please fill all required fields';
@@ -88,8 +88,8 @@ class AuthService {
       return 'Password must be at least 6 characters';
     }
 
-    // Validate role - must be 'driver' or 'admin'
-    if (role != 'driver' && role != 'admin') {
+    // 🔹 UPDATED: Validate role - now accepts 'driver', 'admin', OR 'user'
+    if (role != 'driver' && role != 'admin' && role != 'user') {
       return 'Invalid role selected';
     }
 
@@ -100,12 +100,11 @@ class AuthService {
       );
 
       // Create user document in Firestore with selected role
-      // This matches the admin dashboard query: where('role', isEqualTo: 'driver')
       await _db.collection('users').doc(userCred.user!.uid).set({
         'name': name,
         'email': email,
         'phone': phone ?? '',
-        'role': role, // Stores 'driver' or 'admin' exactly as selected
+        'role': role, // Stores 'driver', 'admin', or 'user'
         'created_at': FieldValue.serverTimestamp(),
         'email_verified': false,
       });
