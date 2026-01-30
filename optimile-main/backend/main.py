@@ -1,16 +1,14 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 from typing import List, Optional
 from datetime import datetime
 import json
 from model.impact import estimate_delay
 from model.decision import should_reoptimize
 
-from model.alns_optimizer import optimize_route
+from model.alns_optimizer import optimize_route, route_cost
 import joblib
 
-ml_model = joblib.load("model/optimize_model.pkl")
-from datetime import datetime
 
 
 app = FastAPI()
@@ -25,8 +23,14 @@ class Stop(BaseModel):
     is_fragile: bool = False
 
     # time window in minutes from start of day (e.g. 480 = 08:00)
-    window_start: Optional[int] = None
-    window_end: Optional[int] = None
+    window_start: Optional[StrictInt] = None
+    window_end: Optional[StrictInt] = None
+
+
+class Incident(BaseModel):
+    index: StrictInt          # index in stops / remaining_stops list
+    kind: str                 # traffic_jam | accident | road_closed
+    severity: float = 1.0
 
 
 class OptimizeRequest(BaseModel):
@@ -34,7 +38,12 @@ class OptimizeRequest(BaseModel):
     vehicle: str              # motorcycle | scooter | van
     traffic: str
     weather: str
-    start_time: Optional[str] = None  # ISO string from frontend
+
+    # minutes since midnight (no datetime parsing, no silent casting)
+    start_time: Optional[StrictInt] = None
+
+    # optional real-time incidents affecting specific stops
+    incidents: Optional[List[Incident]] = None
 
 
 class ReoptimizeRequest(BaseModel):
@@ -45,6 +54,8 @@ class ReoptimizeRequest(BaseModel):
     traffic: str
     weather: str
     reason: str
+    severity: Optional[float] = None
+    incidents: Optional[List[Incident]] = None
 
 
 # =========================
@@ -60,12 +71,14 @@ def optimize(req: OptimizeRequest):
     time_windows = [
         (s.window_start, s.window_end) for s in req.stops
     ]
-    if req.start_time:
-        dt = datetime.fromisoformat(req.start_time)
+
+    # start_time is expected in minutes since midnight (StrictInt)
+    if req.start_time is not None:
+        start_time = int(req.start_time)
+        dt = datetime.now()
     else:
         dt = datetime.now()
-
-    start_time = dt.hour * 60 + dt.minute   # ✅ INTEGER MINUTES
+        start_time = dt.hour * 60 + dt.minute
 
     context = {
         "vehicle": req.vehicle.lower(),
@@ -75,12 +88,45 @@ def optimize(req: OptimizeRequest):
         "day_of_week": dt.weekday(),
     }
 
+    # optional single incident – pick the most severe if provided
+    if req.incidents:
+        most_severe = max(req.incidents, key=lambda x: x.severity)
+        context["incident"] = {
+            "index": int(most_severe.index),
+            "kind": most_severe.kind,
+            "severity": float(most_severe.severity),
+        }
+
+    # baseline identity route cost (for logging / validation)
+    baseline_route = list(range(len(coords)))
+
+    baseline_cost = route_cost(
+        baseline_route,
+        coords,
+        fragile_flags,
+        time_windows,
+        start_time,
+        context,
+    )
+
     order, cost = optimize_route(
         coords=coords,
         fragile_flags=fragile_flags,
         time_windows=time_windows,
         context=context,
         start_time_min=start_time,  # ← minutes
+    )
+
+    improvement = baseline_cost - cost
+
+    # lightweight, explainable log for debugging/evaluation
+    print(
+        "[OPTIMIZE] "
+        f"vehicle={req.vehicle} traffic={req.traffic} "
+        f"n_stops={len(coords)} "
+        f"baseline_cost={baseline_cost:.3f} "
+        f"optimized_cost={cost:.3f} "
+        f"improvement={improvement:.3f}"
     )
 
     return {
@@ -129,21 +175,67 @@ def reoptimize(req: ReoptimizeRequest):
         (s.window_start, s.window_end) for s in req.remaining_stops
     ]
 
+    now = datetime.now()
+    start_time = now.hour * 60 + now.minute
+
+    # build real-time incident context from reason/severity or explicit incidents
+    incident_ctx = None
+    if req.incidents:
+        most_severe = max(req.incidents, key=lambda x: x.severity)
+        incident_ctx = {
+            "index": int(most_severe.index) + 1,  # +1 because 0 is current driver position
+            "kind": most_severe.kind,
+            "severity": float(most_severe.severity),
+        }
+    elif req.reason in ("traffic_jam", "accident", "road_closed"):
+        incident_ctx = {
+            "index": 1,  # first remaining stop
+            "kind": req.reason,
+            "severity": float(req.severity or 1.0),
+        }
+
+    context = {
+        "vehicle": req.vehicle,
+        "traffic": req.traffic,
+        "weather": req.weather,
+        "order_minutes": start_time,
+        "day_of_week": now.weekday(),
+    }
+
+    if incident_ctx:
+        context["incident"] = incident_ctx
+
+    baseline_route = list(range(len(coords)))
+    baseline_cost = route_cost(
+        baseline_route,
+        coords,
+        fragile_flags,
+        time_windows,
+        start_time,
+        context,
+    )
+
     order, cost = optimize_route(
         coords=coords,
         fragile_flags=fragile_flags,
         time_windows=time_windows,
-        context={
-            "vehicle": req.vehicle,
-            "traffic": req.traffic,
-            "weather": req.weather,
-            "order_minutes": datetime.now().hour * 60,
-            "day_of_week": datetime.now().weekday(),
-        },
-        start_time_min=datetime.now().hour * 60,
+        context=context,
+        start_time_min=start_time,
     )
 
     order = [i - 1 for i in order if i != 0]
+
+    improvement = baseline_cost - cost
+
+    print(
+        "[REOPTIMIZE] "
+        f"vehicle={req.vehicle} traffic={req.traffic} "
+        f"reason={req.reason} delay={event_delay:.2f} "
+        f"n_remaining={len(req.remaining_stops)} "
+        f"baseline_cost={baseline_cost:.3f} "
+        f"optimized_cost={cost:.3f} "
+        f"improvement={improvement:.3f}"
+    )
 
     return {
         "rerouted": True,
@@ -152,6 +244,8 @@ def reoptimize(req: ReoptimizeRequest):
                 "lat": req.remaining_stops[i].lat,
                 "lng": req.remaining_stops[i].lng,
                 "is_fragile": req.remaining_stops[i].is_fragile,
+                "window_start": req.remaining_stops[i].window_start,
+                "window_end": req.remaining_stops[i].window_end,
             }
             for i in order
         ],

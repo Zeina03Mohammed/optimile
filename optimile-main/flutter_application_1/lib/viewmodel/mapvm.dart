@@ -147,15 +147,26 @@ void addStop(
 }) {
   if (navigationStarted) return;
 
+  final int windowStartMin = startTime != null
+      ? startTime.hour * 60 + startTime.minute
+      : 0; // open from midnight
+
+  final int windowEndMin = endTime != null
+      ? endTime.hour * 60 + endTime.minute
+      : 24 * 60; // open until end of day
+
   final stop = Stop(
     location: point,
     isFragile: isFragile,
+    // keep estimated/actual for analytics, but windows drive optimization
     estimatedTime: startTime != null
         ? startTime.hour * 60 + startTime.minute.toDouble()
         : null,
     actualTime: endTime != null
         ? endTime.hour * 60 + endTime.minute.toDouble()
         : null,
+    windowStartMin: windowStartMin,
+    windowEndMin: windowEndMin,
   );
 
   stops.add(stop);
@@ -194,12 +205,16 @@ void addStop(
   final List<Stop> originalStops = List.from(stops);
 
   // ---------- BACKEND CALL ----------
-final payload = {
-  "stops": stops.map((s) => s.toPayload()).toList(),
-  "vehicle": vehicleType, // motorcycle | scooter | van
-  "traffic": "Medium",
-  "weather": "Sunny",
-};
+  final now = TimeOfDay.now();
+  final startMinutes = now.hour * 60 + now.minute;
+
+  final payload = {
+    "stops": stops.map((s) => s.toPayload()).toList(),
+    "vehicle": vehicleType, // motorcycle | scooter | van
+    "traffic": "Medium",
+    "weather": "Sunny",
+    "start_time": startMinutes, // minutes since midnight
+  };
 
   try {
     final response = await http.post(
@@ -212,14 +227,21 @@ final payload = {
       throw Exception("Backend error");
     }
 
-    final optimizedStops = (jsonDecode(response.body)["optimized_route"] as List)
-    .map<Stop>((s) => Stop(
-          location: LatLng(s["lat"], s["lng"]),
-          isFragile: s["is_fragile"] ?? false,
-        estimatedTime: (s["window_start"] as num?)?.toDouble(),
-        actualTime: (s["window_end"] as num?)?.toDouble(),
-        ))
-    .toList();
+    final optimizedStops =
+        (jsonDecode(response.body)["optimized_route"] as List)
+            .map<Stop>((s) {
+      final int windowStart = (s["window_start"] as int?) ?? 0;
+      final int windowEnd = (s["window_end"] as int?) ?? 24 * 60;
+
+      return Stop(
+        location: LatLng(s["lat"], s["lng"]),
+        isFragile: s["is_fragile"] ?? false,
+        windowStartMin: windowStart,
+        windowEndMin: windowEnd,
+        estimatedTime: windowStart.toDouble(),
+        actualTime: windowEnd.toDouble(),
+      );
+    }).toList();
 
     // ---------- OPTIMIZED ETA ----------
     double optimizedEta = 0;
@@ -235,6 +257,12 @@ final payload = {
     // ---------- VALIDATION ----------
     final improvement = initialEta - optimizedEta;
     final percent = (improvement / initialEta) * 100;
+
+    debugPrint(
+        "ALNS /optimize baseline=${initialEta.toStringAsFixed(2)} min, "
+        "optimized=${optimizedEta.toStringAsFixed(2)} min, "
+        "improvement=${improvement.toStringAsFixed(2)} min "
+        "(${percent.toStringAsFixed(1)}%)");
 
     if (improvement <= 0.5) {
       // Reject bad optimization
@@ -596,16 +624,17 @@ Future<void> reoptimizeRoute({
       before += route["legs"][0]["duration"]["value"] / 60.0;
       origin = stop.location;
     }
-      final payload = {
-        "current_lat": currentLocation!.latitude,
-        "current_lng": currentLocation!.longitude,
-        "remaining_stops": stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
-        "vehicle": vehicleType,
-        "traffic": "Heavy",
-        "weather": "Sunny",
-        "reason": "traffic_jam",
-      };
-
+    final payload = {
+      "current_lat": currentLocation!.latitude,
+      "current_lng": currentLocation!.longitude,
+      "remaining_stops":
+          stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
+      "vehicle": vehicleType,
+      "traffic": "Heavy",
+      "weather": "Sunny",
+      "reason": reason,
+      "severity": severity,
+    };
 
     final response = await http.post(
       Uri.parse("http://10.0.2.2:8000/reoptimize"),
@@ -615,11 +644,21 @@ Future<void> reoptimizeRoute({
 
     if (response.statusCode != 200) return;
 
-    final optimizedStops = (jsonDecode(response.body)["optimized_route"] as List)
-        .map<Stop>((s) => Stop(
-              location: LatLng(s["lat"], s["lng"]),
-            ))
-        .toList();
+    final optimizedStops =
+        (jsonDecode(response.body)["optimized_route"] as List)
+            .map<Stop>((s) {
+      final int windowStart = (s["window_start"] as int?) ?? 0;
+      final int windowEnd = (s["window_end"] as int?) ?? 24 * 60;
+
+      return Stop(
+        location: LatLng(s["lat"], s["lng"]),
+        isFragile: s["is_fragile"] ?? false,
+        windowStartMin: windowStart,
+        windowEndMin: windowEnd,
+        estimatedTime: windowStart.toDouble(),
+        actualTime: windowEnd.toDouble(),
+      );
+    }).toList();
 
     // ---------- NEW ETA ----------
     double after = 0;
@@ -631,6 +670,16 @@ Future<void> reoptimizeRoute({
       after += route["legs"][0]["duration"]["value"] / 60.0;
       origin = stop.location;
     }
+
+    final delta = before - after;
+    final percent = (delta / before) * 100;
+
+    debugPrint(
+        "ALNS /reoptimize reason=$reason "
+        "baseline=${before.toStringAsFixed(2)} min, "
+        "optimized=${after.toStringAsFixed(2)} min, "
+        "improvement=${delta.toStringAsFixed(2)} min "
+        "(${percent.toStringAsFixed(1)}%)");
 
     if (after >= before) {
       _isReoptimizing = false;
