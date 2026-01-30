@@ -40,28 +40,36 @@ class _MapView extends StatelessWidget {
             polylines: vm.polylines,
             myLocationEnabled: true,
             onMapCreated: (c) => vm.mapController = c,
-     onTap: (latLng) async {
-  final bool isFragile = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text("Is this package fragile?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("No"),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Yes"),
-            ),
-          ],
-        ),
-      ) ??
-      false; // ✅ default if dialog dismissed
+            onTap: (latLng) async {
+              // Unified stop configuration: fragile + time window
+              final config = await vm.showStopConfigDialog(context);
+              if (config == null) return;
 
-  vm.addStop(latLng, isFragile: isFragile);
-},
+              final now = TimeOfDay.now();
+              final nowMinutes = now.hour * 60 + now.minute;
+
+              if (config.end != null) {
+                final endMinutes = config.end!.hour * 60 + config.end!.minute;
+                if (endMinutes < nowMinutes) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Deadline is in the past. Please choose a later time.",
+                      ),
                     ),
+                  );
+                  return;
+                }
+              }
+
+              vm.addStop(
+                latLng,
+                isFragile: config.isFragile,
+                startTime: config.start,
+                endTime: config.end,
+              );
+            },
+          ),
 
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
@@ -290,24 +298,50 @@ class _MapView extends StatelessWidget {
                                 color = Colors.orange;
                               }
 
+                              final start = TimeOfDay(
+                                  hour: (stop.windowStartMin ~/ 60),
+                                  minute: (stop.windowStartMin % 60));
+                              final end = TimeOfDay(
+                                  hour: (stop.windowEndMin ~/ 60),
+                                  minute: (stop.windowEndMin % 60));
+
+                              final windowLabel =
+                                  "${start.format(context)}–${end.format(context)}";
+
                               return ListTile(
                                 leading: Icon(
                                   Icons.location_on,
                                   color: color,
                                   size: 18,
                                 ),
-                                title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      stop.title ?? 'Stop ${index + 1}',
-                                      style: const TextStyle(color: Colors.white),
+                                title: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            stop.title ?? 'Stop ${index + 1}',
+                                            style: const TextStyle(
+                                                color: Colors.white),
+                                          ),
+                                        ),
+                                        if (stop.isFragile)
+                                          const Icon(Icons.warning,
+                                              color: Colors.red, size: 16),
+                                      ],
                                     ),
-                                  ),
-                                  if (stop.isFragile)
-                                    const Icon(Icons.warning, color: Colors.red, size: 16),
-                                ],
-                              ),);
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      "Window: $windowLabel",
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
                             },
                           ).toList(),
                         ),

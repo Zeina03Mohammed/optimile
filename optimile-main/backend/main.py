@@ -5,10 +5,10 @@ from datetime import datetime
 import json
 from model.impact import estimate_delay
 from model.decision import should_reoptimize
+from model.traffic_provider import fetch_incidents_along_route
 
 from model.alns_optimizer import optimize_route, route_cost
 import joblib
-
 
 
 app = FastAPI()
@@ -165,7 +165,7 @@ def reoptimize(req: ReoptimizeRequest):
     if not should:
         return {"rerouted": False}
 
-    # ONLY remaining route
+    # ONLY remaining route (driver position + remaining stops)
     coords = [(req.current_lat, req.current_lng)] + [
         (s.lat, s.lng) for s in req.remaining_stops
     ]
@@ -178,21 +178,39 @@ def reoptimize(req: ReoptimizeRequest):
     now = datetime.now()
     start_time = now.hour * 60 + now.minute
 
-    # build real-time incident context from reason/severity or explicit incidents
+    # build real-time incident context from:
+    #  - explicit incidents (mobile reports)
+    #  - live provider API (TomTom example)
+    #  - high-level reason / severity
     incident_ctx = None
+
+    live_incidents = fetch_incidents_along_route(coords)
+
+    candidate_incidents = []
     if req.incidents:
-        most_severe = max(req.incidents, key=lambda x: x.severity)
-        incident_ctx = {
-            "index": int(most_severe.index) + 1,  # +1 because 0 is current driver position
-            "kind": most_severe.kind,
-            "severity": float(most_severe.severity),
-        }
-    elif req.reason in ("traffic_jam", "accident", "road_closed"):
-        incident_ctx = {
-            "index": 1,  # first remaining stop
-            "kind": req.reason,
-            "severity": float(req.severity or 1.0),
-        }
+        # shift indices by +1 because 0 is current driver location
+        for inc in req.incidents:
+            candidate_incidents.append(
+                {
+                    "index": int(inc.index) + 1,
+                    "kind": inc.kind,
+                    "severity": float(inc.severity),
+                }
+            )
+    candidate_incidents.extend(live_incidents)
+
+    if not candidate_incidents and req.reason in ("traffic_jam", "accident", "road_closed"):
+        candidate_incidents.append(
+            {
+                "index": 1,  # first remaining stop
+                "kind": req.reason,
+                "severity": float(req.severity or 1.0),
+            }
+        )
+
+    if candidate_incidents:
+        most_severe = max(candidate_incidents, key=lambda x: x["severity"])
+        incident_ctx = most_severe
 
     context = {
         "vehicle": req.vehicle,

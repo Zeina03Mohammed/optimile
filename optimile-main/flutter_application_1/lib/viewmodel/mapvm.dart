@@ -147,6 +147,18 @@ void addStop(
 }) {
   if (navigationStarted) return;
 
+  // Reject deadlines that are already in the past (same-day check)
+  final now = TimeOfDay.now();
+  final nowMinutes = now.hour * 60 + now.minute;
+
+  if (endTime != null) {
+    final endMinutes = endTime.hour * 60 + endTime.minute;
+    if (endMinutes < nowMinutes) {
+      debugPrint("Rejected stop: deadline already in the past.");
+      return;
+    }
+  }
+
   final int windowStartMin = startTime != null
       ? startTime.hour * 60 + startTime.minute
       : 0; // open from midnight
