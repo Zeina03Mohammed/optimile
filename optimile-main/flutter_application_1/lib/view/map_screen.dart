@@ -40,8 +40,28 @@ class _MapView extends StatelessWidget {
             polylines: vm.polylines,
             myLocationEnabled: true,
             onMapCreated: (c) => vm.mapController = c,
-            onTap: (latLng) => vm.addStop(latLng),
-          ),
+     onTap: (latLng) async {
+  final bool isFragile = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Is this package fragile?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("No"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Yes"),
+            ),
+          ],
+        ),
+      ) ??
+      false; // ✅ default if dialog dismissed
+
+  vm.addStop(latLng, isFragile: isFragile);
+},
+                    ),
 
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
@@ -135,6 +155,25 @@ class _MapView extends StatelessWidget {
                         vm.distance,
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
+  Row(
+    children: [
+      const Text("Vehicle:", style: TextStyle(color: Colors.white)),
+      const SizedBox(width: 12),
+      DropdownButton<String>(
+        dropdownColor: Colors.black,
+        value: vm.vehicleType,
+        items: const [
+          DropdownMenuItem(value: "motorcycle", child: Text("Motorcycle")),
+          DropdownMenuItem(value: "scooter", child: Text("Scooter")),
+          DropdownMenuItem(value: "van", child: Text("Van")),
+        ],
+        onChanged: vm.navigationStarted
+            ? null
+            : (v) => vm.setVehicleType(v!),
+      ),
+    ],
+  ),
+
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -159,7 +198,16 @@ class _MapView extends StatelessWidget {
                             ),
                           ),
                       ],
-                    ),
+                    ),const Padding(
+  padding: EdgeInsets.all(12),
+  child: Text(
+    "Delivery Settings",
+    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+  ),
+),
+
+
+
                   ],
                 ),
               ),
@@ -193,8 +241,17 @@ class _MapView extends StatelessWidget {
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
+                              ),const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text(
+                                  "Delivery Settings",
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
                               ),
+
+                            
                               const SizedBox(width: 8),
+                              
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
@@ -239,11 +296,18 @@ class _MapView extends StatelessWidget {
                                   color: color,
                                   size: 18,
                                 ),
-                                title: Text(
-                                  stop.title ?? 'Stop ${index + 1}',
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              );
+                                title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      stop.title ?? 'Stop ${index + 1}',
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                  if (stop.isFragile)
+                                    const Icon(Icons.warning, color: Colors.red, size: 16),
+                                ],
+                              ),);
                             },
                           ).toList(),
                         ),

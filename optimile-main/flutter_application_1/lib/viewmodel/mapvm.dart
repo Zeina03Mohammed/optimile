@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,7 +14,8 @@ class MapVM extends ChangeNotifier {
   PlacesService get placesService => _placesService;
 
   final FirestoreService firestoreService = FirestoreService();
-
+String vehicleType = "van";
+bool isFragile = false;
   // ================= MAP =================
   GoogleMapController? mapController;
   LatLng? currentLocation;
@@ -73,6 +73,16 @@ class MapVM extends ChangeNotifier {
     searchFocusNode.unfocus();
   }
 
+
+void setVehicleType(String value) {
+  vehicleType = value.toLowerCase();
+  notifyListeners();
+}
+
+void setFragile(bool value) {
+  isFragile = value;
+  notifyListeners();
+}
   Future<List<Place>> getSuggestions(String query) {
     return _placesService.getSuggestions(query);
   }
@@ -129,12 +139,28 @@ class MapVM extends ChangeNotifier {
   }
 
   // ================= STOPS =================
-  void addStop(LatLng point) {
-    if (navigationStarted) return;
-    final stop = Stop(location: point);
-    stops.add(stop);
-    rebuildMap();
-  }
+void addStop(
+  LatLng point, {
+  bool isFragile = false,
+  TimeOfDay? startTime,
+  TimeOfDay? endTime,
+}) {
+  if (navigationStarted) return;
+
+  final stop = Stop(
+    location: point,
+    isFragile: isFragile,
+    estimatedTime: startTime != null
+        ? startTime.hour * 60 + startTime.minute.toDouble()
+        : null,
+    actualTime: endTime != null
+        ? endTime.hour * 60 + endTime.minute.toDouble()
+        : null,
+  );
+
+  stops.add(stop);
+  rebuildMap();
+}
 
   void removeStop(int index) {
     if (navigationStarted) return;
@@ -146,143 +172,156 @@ class MapVM extends ChangeNotifier {
 
   // ================= OPTIMIZE =================
   Future<void> optimizeRoute(BuildContext context) async {
-    if (stops.length < 2 || currentLocation == null) {
+  if (stops.length < 2 || currentLocation == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Add at least two stops")),
+    );
+    return;
+  }
+
+  // ---------- BASELINE ETA (Google Maps) ----------
+  double initialEta = 0;
+  LatLng origin = currentLocation!;
+
+  for (final stop in stops) {
+    final route = await _placesService.getDirections(origin, stop.location);
+    if (route == null) return;
+    initialEta += route["legs"][0]["duration"]["value"] / 60.0;
+    origin = stop.location;
+  }
+
+  // Keep original order SAFE
+  final List<Stop> originalStops = List.from(stops);
+
+  // ---------- BACKEND CALL ----------
+final payload = {
+  "stops": stops.map((s) => s.toPayload()).toList(),
+  "vehicle": vehicleType, // motorcycle | scooter | van
+  "traffic": "Medium",
+  "weather": "Sunny",
+};
+
+  try {
+    final response = await http.post(
+      Uri.parse("http://10.0.2.2:8000/optimize"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Backend error");
+    }
+
+    final optimizedStops = (jsonDecode(response.body)["optimized_route"] as List)
+    .map<Stop>((s) => Stop(
+          location: LatLng(s["lat"], s["lng"]),
+          isFragile: s["is_fragile"] ?? false,
+        estimatedTime: (s["window_start"] as num?)?.toDouble(),
+        actualTime: (s["window_end"] as num?)?.toDouble(),
+        ))
+    .toList();
+
+    // ---------- OPTIMIZED ETA ----------
+    double optimizedEta = 0;
+    origin = currentLocation!;
+
+    for (final stop in optimizedStops) {
+      final route = await _placesService.getDirections(origin, stop.location);
+      if (route == null) return;
+      optimizedEta += route["legs"][0]["duration"]["value"] / 60.0;
+      origin = stop.location;
+    }
+
+    // ---------- VALIDATION ----------
+    final improvement = initialEta - optimizedEta;
+    final percent = (improvement / initialEta) * 100;
+
+    if (improvement <= 0.5) {
+      // Reject bad optimization
+      stops
+        ..clear()
+        ..addAll(originalStops);
+      rebuildMap();
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Add at least two stops")),
+        const SnackBar(content: Text("Route already near-optimal")),
       );
       return;
     }
 
-    double initialTotalMinutes = 0;
-    LatLng? origin = currentLocation;
+    // ---------- ACCEPT OPTIMIZATION ----------
+    stops
+      ..clear()
+      ..addAll(optimizedStops);
 
-    for (var stop in stops) {
-      if (origin != null) {
-        final route = await _placesService.getDirections(origin, stop.location);
-        if (route != null) {
-          final seconds = route["legs"][0]["duration"]["value"];
-          initialTotalMinutes += seconds / 60.0;
-        }
-      }
-      origin = stop.location;
-    }
+    await rebuildMap();
 
-    final payload = {
-      "stops": stops
-          .map((s) => {"lat": s.location.latitude, "lng": s.location.longitude})
-          .toList(),
-      "vehicle": "Van",
-      "traffic": "Medium",
-      "weather": "Sunny"
-    };
-
-    try {
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/optimize"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(payload),
-      );
-
-      final data = jsonDecode(response.body);
-      final optimizedRoute = data["optimized_route"] as List<dynamic>;
-
-      final List<Stop> newStops = optimizedRoute.map((s) {
-        return Stop(
-          location: LatLng(s["lat"], s["lng"]),
-        );
-      }).toList();
-
-      double optimizedTotalMinutes = 0;
-      origin = currentLocation;
-
-      for (var stop in newStops) {
-        if (origin != null) {
-          final route =
-              await _placesService.getDirections(origin, stop.location);
-          if (route != null) {
-            final seconds = route["legs"][0]["duration"]["value"];
-            optimizedTotalMinutes += seconds / 60.0;
-          }
-        }
-        origin = stop.location;
-      }
-
-      final saved =
-          math.max(initialTotalMinutes - optimizedTotalMinutes, 0);
-
-      stops
-        ..clear()
-        ..addAll(newStops);
-
-      rebuildMap();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Initial ETA: ${initialTotalMinutes.toStringAsFixed(1)} min\n"
-            "Optimized ETA: ${optimizedTotalMinutes.toStringAsFixed(1)} min\n"
-            "Saved: ${saved.toStringAsFixed(1)} min",
-          ),
-          duration: const Duration(seconds: 6),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Improvement: ${percent.toStringAsFixed(1)}%",
         ),
-      );
+        duration: const Duration(seconds: 6),
+      ),
+    );
 
-      await firestoreService.saveDeliveryToFirestore(
-        initialTotalMinutes,
-        optimizedTotalMinutes,
-        stops,
-      );
-    } catch (e) {
-      debugPrint("Optimization error: $e");
-    }
+    await firestoreService.saveDeliveryToFirestore(
+      initialEta,
+      optimizedEta,
+      stops,
+    );
+  } catch (e) {
+    debugPrint("Optimization error: $e");
   }
-
+}
   // ================= REBUILD MAP =================
   Future<void> rebuildMap() async {
-    markers.removeWhere((m) => m.markerId.value != 'start');
-    polylines.clear();
+  markers.removeWhere((m) => m.markerId.value != 'start');
+  polylines.clear();
 
-    LatLng? origin = currentLocation;
+  if (currentLocation == null) return;
 
-    for (int i = 0; i < stops.length; i++) {
-      final Stop stop = stops[i];
+  LatLng origin = currentLocation!;
+  double totalSeconds = 0;
+  double totalMeters = 0;
 
-      markers.add(
-        Marker(
-          markerId: MarkerId('stop_$i'),
-          position: stop.location,
-          infoWindow: InfoWindow(
-              title: stopTitles[stop] ?? stop.title ?? 'Stop ${i + 1}'),
+  for (int i = 0; i < stops.length; i++) {
+    final stop = stops[i];
+
+    markers.add(
+      Marker(
+        markerId: MarkerId('stop_$i'),
+        position: stop.location,
+        infoWindow: InfoWindow(title: stopTitles[stop] ?? 'Stop ${i + 1}'),
+      ),
+    );
+
+    final route = await _placesService.getDirections(origin, stop.location);
+    if (route == null) continue;
+
+    final leg = route["legs"][0];
+    totalSeconds += leg["duration"]["value"];
+    totalMeters += leg["distance"]["value"];
+
+    polylines.add(
+      Polyline(
+        polylineId: PolylineId('route_$i'),
+        points: _placesService.decodePolyline(
+          route["overview_polyline"]["points"],
         ),
-      );
+        width: 5,
+        color: Colors.blue,
+      ),
+    );
 
-      if (origin != null) {
-        final route =
-            await _placesService.getDirections(origin, stop.location);
-        if (route != null) {
-          polylines.add(
-            Polyline(
-              polylineId: PolylineId('route_$i'),
-              points: _placesService.decodePolyline(
-                  route['overview_polyline']['points']),
-              width: 5,
-              color: Colors.blue,
-            ),
-          );
-
-          if (i == stops.length - 1) {
-            distance = route['legs'][0]['distance']['text'];
-            duration = route['legs'][0]['duration']['text'];
-          }
-        }
-      }
-
-      origin = stop.location;
-    }
-
-    notifyListeners();
+    origin = stop.location;
   }
 
+  distance = "${(totalMeters / 1000).toStringAsFixed(1)} km";
+  duration = "${(totalSeconds / 60).round()} min";
+
+  notifyListeners();
+}
   // ================= START RIDE =================
   Future<void> startRide(BuildContext context) async {
     if (stops.isEmpty || currentLocation == null) return;
@@ -430,11 +469,12 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
   }
 
   // ================= MONITORS =================
-  void startDeviationMonitor(BuildContext context) {
-    _deviationTimer?.cancel();
+void startDeviationMonitor(BuildContext context) {
+  _deviationTimer?.cancel();
 
-    _deviationTimer =
-        Timer.periodic(const Duration(seconds: 10), (_) async {
+  _deviationTimer = Timer.periodic(
+    const Duration(seconds: 10),
+    (_) async {
       if (!navigationStarted ||
           _plannedRoutePoints.isEmpty ||
           currentLocation == null ||
@@ -452,32 +492,42 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
         if (d < minDist) minDist = d;
       }
 
+      // 40m off the planned polyline = real deviation
       if (minDist > 40) {
         _isReoptimizing = true;
+        _lastReoptTime = DateTime.now();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("⚠ You are off route. Re-optimizing…"),
+            content: Text("⚠ Off route detected. Re-optimizing…"),
           ),
         );
 
-        await reoptimizeRoute("deviation");
+        await reoptimizeRoute(
+          reason: "deviation",
+          severity: 1.0, // full severity — route is invalid
+          affectedStopIndex: currentStopIndex,
+        );
+
         _plannedRoutePoints.clear();
         _isReoptimizing = false;
       }
-    });
-  }
+    },
+  );
+}
 
-  void startTrafficMonitor(BuildContext context) {
-    _trafficTimer?.cancel();
+void startTrafficMonitor(BuildContext context) {
+  _trafficTimer?.cancel();
 
-    _trafficTimer =
-        Timer.periodic(const Duration(minutes: 1), (_) async {
+  _trafficTimer = Timer.periodic(
+    const Duration(minutes: 1),
+    (_) async {
       if (!navigationStarted ||
           currentLocation == null ||
           stops.isEmpty ||
           _isReoptimizing) return;
 
+      // Prevent rapid re-optimizations
       if (_lastReoptTime != null) {
         final diff =
             DateTime.now().difference(_lastReoptTime!).inSeconds;
@@ -487,7 +537,7 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
       try {
         final route = await _placesService.getDirections(
           currentLocation!,
-          stops.first.location,
+          stops[currentStopIndex].location,
         );
 
         if (route == null) return;
@@ -510,59 +560,171 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
             ),
           );
 
-          await reoptimizeRoute("traffic");
-          _isReoptimizing = false;
+          await reoptimizeRoute(
+            reason: "traffic_jam",
+            severity: ratio,
+            affectedStopIndex: currentStopIndex,
+          );
         }
       } catch (e) {
         debugPrint("❌ Traffic monitor error: $e");
+      } finally {
         _isReoptimizing = false;
       }
-    });
-  }
+    },
+  );
+}
+// ================= REOPTIMIZE =================
+Future<void> reoptimizeRoute({
+  required String reason,
+  required double severity,
+  required int affectedStopIndex,
+}) async {
+  if (!navigationStarted || _isReoptimizing || stops.isEmpty) return;
 
-  // ================= REOPTIMIZE =================
-  Future<void> reoptimizeRoute(String reason) async {
-    if (!navigationStarted || _isReoptimizing || stops.isEmpty) return;
+  _isReoptimizing = true;
+  _lastReoptTime = DateTime.now();
 
-    _lastReoptTime = DateTime.now();
+  try {
+    // ---------- BASELINE ETA ----------
+    double before = 0;
+    LatLng origin = currentLocation!;
 
-    try {
+    for (final stop in stops) {
+      final route = await _placesService.getDirections(origin, stop.location);
+      if (route == null) return;
+      before += route["legs"][0]["duration"]["value"] / 60.0;
+      origin = stop.location;
+    }
       final payload = {
         "current_lat": currentLocation!.latitude,
         "current_lng": currentLocation!.longitude,
-        "remaining_stops": stops
-            .map((s) =>
-                {"lat": s.location.latitude, "lng": s.location.longitude})
-            .toList(),
-        "vehicle": "Van",
-        "traffic": "High",
+        "remaining_stops": stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
+        "vehicle": vehicleType,
+        "traffic": "Heavy",
         "weather": "Sunny",
-        "reason": reason
+        "reason": "traffic_jam",
       };
 
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/reoptimize"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(payload),
-      );
 
-      final data = jsonDecode(response.body);
-      final optimizedRoute = data["optimized_route"];
+    final response = await http.post(
+      Uri.parse("http://10.0.2.2:8000/reoptimize"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
 
-      final List<Stop> newStops = optimizedRoute.map<Stop>((s) {
-        return Stop(
-          location: LatLng(s["lat"], s["lng"]),
-        );
-      }).toList();
+    if (response.statusCode != 200) return;
 
-      stops
-        ..clear()
-        ..addAll(newStops);
+    final optimizedStops = (jsonDecode(response.body)["optimized_route"] as List)
+        .map<Stop>((s) => Stop(
+              location: LatLng(s["lat"], s["lng"]),
+            ))
+        .toList();
 
-      rebuildMap();
-    } catch (e) {
-      debugPrint("Re-optimization error: $e");
+    // ---------- NEW ETA ----------
+    double after = 0;
+    origin = currentLocation!;
+
+    for (final stop in optimizedStops) {
+      final route = await _placesService.getDirections(origin, stop.location);
+      if (route == null) return;
+      after += route["legs"][0]["duration"]["value"] / 60.0;
+      origin = stop.location;
     }
-  }
 
+    if (after >= before) {
+      _isReoptimizing = false;
+      return; // reject bad reoptimization
+    }
+
+    stops
+      ..clear()
+      ..addAll(optimizedStops);
+
+    await rebuildMap();
+  } catch (e) {
+    debugPrint("Reoptimization error: $e");
+  } finally {
+    _isReoptimizing = false;
+  }
+}
+Future<StopConfig?> showStopConfigDialog(BuildContext context) async {
+  bool isFragile = false;
+  TimeOfDay? start;
+  TimeOfDay? end;
+
+  return showDialog<StopConfig>(
+    context: context,
+    builder: (_) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text("Stop Configuration"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  title: const Text("Fragile package"),
+                  value: isFragile,
+                  onChanged: (v) => setState(() => isFragile = v),
+                ),
+
+                const SizedBox(height: 8),
+
+                ListTile(
+                  title: Text(
+                    start == null
+                        ? "Select start time"
+                        : "Start: ${start!.format(context)}",
+                  ),
+                  onTap: () async {
+                    final t = await showTimePicker(
+                      context: context,
+                      initialTime: const TimeOfDay(hour: 8, minute: 0),
+                    );
+                    if (t != null) setState(() => start = t);
+                  },
+                ),
+
+                ListTile(
+                  title: Text(
+                    end == null
+                        ? "Select end time"
+                        : "End: ${end!.format(context)}",
+                  ),
+                  onTap: () async {
+                    final t = await showTimePicker(
+                      context: context,
+                      initialTime: const TimeOfDay(hour: 12, minute: 0),
+                    );
+                    if (t != null) setState(() => end = t);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    StopConfig(
+                      isFragile: isFragile,
+                      start: start,
+                      end: end,
+                    ),
+                  );
+                },
+                child: const Text("Add Stop"),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 }
