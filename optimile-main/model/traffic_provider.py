@@ -45,11 +45,13 @@ def fetch_incidents_along_route(coords: List[Tuple[float, float]]) -> List[Dict]
         return []
 
     south, west, north, east = _bbox_for_coords(coords)
+    # TomTom bbox: minLon, minLat, maxLon, maxLat (longitude first)
+    bbox = f"{west},{south},{east},{north}"
 
     # See: https://developer.tomtom.com/traffic-api/documentation/traffic-incidents
     url = "https://api.tomtom.com/traffic/services/5/incidentDetails"
     params = {
-        "bbox": f"{south},{west},{north},{east}",
+        "bbox": bbox,
         "key": api_key,
         "fields": "id,geometry,properties{iconCategory,magnitudeOfDelay,incidentCategory}",
         "language": "en-GB",

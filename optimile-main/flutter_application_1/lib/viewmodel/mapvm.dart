@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../env.dart';
 import '../services/places_service.dart';
 import '../services/firestore_service.dart';
 import 'package:http/http.dart' as http;
@@ -232,7 +233,7 @@ void addStop(
 
   try {
     final response = await http.post(
-      Uri.parse("http://10.0.2.2:8000/optimize"),
+      Uri.parse("${Env.backendBaseUrl}/optimize"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(payload),
     );
@@ -510,6 +511,48 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
     await rebuildMap();
   }
 
+  /// Simulate traffic incident: tries backend first; if unreachable, runs offline demo reroute.
+  Future<void> simulateTraffic(BuildContext context) async {
+    if (!navigationStarted || stops.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("🔧 Simulating traffic/incident...")),
+    );
+    final ok = await reoptimizeRoute(
+      context: context,
+      reason: "traffic_jam",
+      severity: 0.5,
+      affectedStopIndex: currentStopIndex,
+    );
+    if (!ok && context.mounted) {
+      await _runOfflineDemoReroute(context);
+    }
+  }
+
+  /// Offline demo: reroute remaining stops locally (for committee when backend unreachable).
+  Future<void> _runOfflineDemoReroute(BuildContext context) async {
+    if (stops.length < 2 || currentStopIndex >= stops.length - 1) return;
+    final remaining = stops.skip(currentStopIndex).toList();
+    if (remaining.length < 2) return;
+    // Swap first two remaining stops to simulate ALNS reordering
+    final reordered = [
+      remaining[1],
+      remaining[0],
+      ...remaining.skip(2),
+    ];
+    stops
+      ..removeRange(currentStopIndex, stops.length)
+      ..addAll(reordered);
+    await rebuildMap();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✓ Demo: Route adapted (incident simulated, offline)"),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   // ================= MONITORS =================
 void startDeviationMonitor(BuildContext context) {
   _deviationTimer?.cancel();
@@ -548,6 +591,7 @@ void startDeviationMonitor(BuildContext context) {
         );
 
         await reoptimizeRoute(
+          context: context,
           reason: "deviation",
           severity: 1.0, // full severity — route is invalid
           affectedStopIndex: currentStopIndex,
@@ -564,7 +608,7 @@ void startTrafficMonitor(BuildContext context) {
   _trafficTimer?.cancel();
 
   _trafficTimer = Timer.periodic(
-    const Duration(minutes: 1),
+    const Duration(seconds: 45),
     (_) async {
       if (!navigationStarted ||
           currentLocation == null ||
@@ -577,7 +621,7 @@ void startTrafficMonitor(BuildContext context) {
       if (_lastReoptTime != null) {
         final diff =
             DateTime.now().difference(_lastReoptTime!).inSeconds;
-        if (diff < 90) return;
+        if (diff < 60) return;
       }
 
       try {
@@ -592,11 +636,11 @@ void startTrafficMonitor(BuildContext context) {
         final normal = leg?["duration"]?["value"];
         final traffic = leg?["duration_in_traffic"]?["value"];
 
-        if (normal == null || traffic == null) return;
+        if (normal == null) return;
+        final trafficVal = traffic ?? normal;
+        final ratio = (trafficVal - normal) / normal;
 
-        final ratio = (traffic - normal) / normal;
-
-        if (ratio > 0.30) {
+        if (ratio > 0.15) {
           _isReoptimizing = true;
           _lastReoptTime = DateTime.now();
 
@@ -607,6 +651,7 @@ void startTrafficMonitor(BuildContext context) {
           );
 
           await reoptimizeRoute(
+            context: context,
             reason: "traffic_jam",
             severity: ratio,
             affectedStopIndex: currentStopIndex,
@@ -621,12 +666,14 @@ void startTrafficMonitor(BuildContext context) {
   );
 }
 // ================= REOPTIMIZE =================
-Future<void> reoptimizeRoute({
+/// Returns true if reroute succeeded (backend + ETA improved), false otherwise.
+Future<bool> reoptimizeRoute({
+  BuildContext? context,
   required String reason,
   required double severity,
   required int affectedStopIndex,
 }) async {
-  if (!navigationStarted || _isReoptimizing || stops.isEmpty) return;
+  if (!navigationStarted || _isReoptimizing || stops.isEmpty) return false;
 
   _isReoptimizing = true;
   _lastReoptTime = DateTime.now();
@@ -638,7 +685,7 @@ Future<void> reoptimizeRoute({
 
     for (final stop in stops) {
       final route = await _placesService.getDirections(origin, stop.location);
-      if (route == null) return;
+      if (route == null) return false;
       before += route["legs"][0]["duration"]["value"] / 60.0;
       origin = stop.location;
     }
@@ -654,16 +701,35 @@ Future<void> reoptimizeRoute({
       "severity": severity,
     };
 
-    final response = await http.post(
-      Uri.parse("http://10.0.2.2:8000/reoptimize"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(payload),
-    );
+    final response = await http
+        .post(
+          Uri.parse("${Env.backendBaseUrl}/reoptimize"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 8));
 
-    if (response.statusCode != 200) return;
+    if (response.statusCode != 200) {
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Backend error ${response.statusCode}")),
+        );
+      }
+      return false;
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (body["rerouted"] != true) {
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Reroute skipped (no improvement)")),
+        );
+      }
+      return false;
+    }
 
     final optimizedStops =
-        (jsonDecode(response.body)["optimized_route"] as List)
+        (body["optimized_route"] as List)
             .map<Stop>((s) {
       final int windowStart = (s["window_start"] as int?) ?? 0;
       final int windowEnd = (s["window_end"] as int?) ?? 24 * 60;
@@ -684,7 +750,7 @@ Future<void> reoptimizeRoute({
 
     for (final stop in optimizedStops) {
       final route = await _placesService.getDirections(origin, stop.location);
-      if (route == null) return;
+      if (route == null) return false;
       after += route["legs"][0]["duration"]["value"] / 60.0;
       origin = stop.location;
     }
@@ -701,7 +767,32 @@ Future<void> reoptimizeRoute({
 
     if (after >= before) {
       _isReoptimizing = false;
-      return; // reject bad reoptimization
+      return false; // reject bad reoptimization
+    }
+
+    final liveIncidentsFound = body["live_incidents_found"] == true;
+    final incidentKind = body["incident_kind"] as String? ?? reason;
+    if (context != null && context.mounted) {
+      if (liveIncidentsFound) {
+        final kindLabel = incidentKind == "road_closed"
+            ? "Road closed"
+            : incidentKind == "accident"
+                ? "Accident"
+                : "Traffic incident";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("⚠ $kindLabel ahead (TomTom). Rerouting to avoid."),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✓ Route updated (${percent.toStringAsFixed(0)}% faster)"),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
 
     stops
@@ -709,8 +800,15 @@ Future<void> reoptimizeRoute({
       ..addAll(optimizedStops);
 
     await rebuildMap();
-  } catch (e) {
-    debugPrint("Reoptimization error: $e");
+    return true;
+  } catch (e, st) {
+    debugPrint("Reoptimization error: $e\n$st");
+    if (context != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Backend unreachable. Use offline demo.")),
+      );
+    }
+    return false;
   } finally {
     _isReoptimizing = false;
   }

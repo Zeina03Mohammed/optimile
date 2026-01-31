@@ -152,8 +152,11 @@ def optimize(req: OptimizeRequest):
 def reoptimize(req: ReoptimizeRequest):
     event_delay = estimate_delay(
         event=req.reason,
-        baseline_eta=20,  # computed from Google Maps
+        baseline_eta=20,  # nominal remaining ETA in minutes
     )
+    # Simulate / manual trigger: use severity as extra delay so we always reoptimize
+    if req.severity and req.severity > 0:
+        event_delay = max(event_delay, req.severity * 15)  # severity 0.5 -> 7.5 min
 
     should = should_reoptimize(
         delay_minutes=event_delay,
@@ -245,11 +248,15 @@ def reoptimize(req: ReoptimizeRequest):
 
     improvement = baseline_cost - cost
 
+    live_incidents_found = len(live_incidents) > 0
+    incident_kind = incident_ctx.get("kind", req.reason) if incident_ctx else req.reason
+
     print(
         "[REOPTIMIZE] "
         f"vehicle={req.vehicle} traffic={req.traffic} "
         f"reason={req.reason} delay={event_delay:.2f} "
         f"n_remaining={len(req.remaining_stops)} "
+        f"live_incidents={live_incidents_found} "
         f"baseline_cost={baseline_cost:.3f} "
         f"optimized_cost={cost:.3f} "
         f"improvement={improvement:.3f}"
@@ -269,6 +276,8 @@ def reoptimize(req: ReoptimizeRequest):
         ],
         "cost": round(cost, 2),
         "reason": req.reason,
+        "live_incidents_found": live_incidents_found,
+        "incident_kind": incident_kind,
     }
 
 # =========================

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'firebase_options.dart';
 import 'viewmodel/authvm.dart';
 import 'view/login.dart';
 import 'view/map_screen.dart';
@@ -10,7 +11,14 @@ import 'view/admin.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e, st) {
+    debugPrint("Firebase init error: $e\n$st");
+    rethrow;
+  }
   runApp(const MyApp());
 }
 

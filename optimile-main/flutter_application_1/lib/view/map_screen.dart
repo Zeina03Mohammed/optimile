@@ -165,10 +165,10 @@ class _MapView extends StatelessWidget {
                       ),
   Row(
     children: [
-      const Text("Vehicle:", style: TextStyle(color: Colors.white)),
+      const Text("Vehicle:", style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
       const SizedBox(width: 12),
       DropdownButton<String>(
-        dropdownColor: Colors.black,
+        dropdownColor: const Color.fromARGB(255, 249, 245, 245),
         value: vm.vehicleType,
         items: const [
           DropdownMenuItem(value: "motorcycle", child: Text("Motorcycle")),
@@ -197,7 +197,16 @@ class _MapView extends StatelessWidget {
                             ),
                           ),
                         ],
-                        if (vm.navigationStarted)
+                        if (vm.navigationStarted) ...[
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async =>
+                                  await vm.simulateTraffic(context),
+                              icon: const Icon(Icons.traffic, size: 18),
+                              label: const Text("Simulate traffic"),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () async =>
@@ -205,17 +214,9 @@ class _MapView extends StatelessWidget {
                               child: const Text("Exit"),
                             ),
                           ),
+                        ],
                       ],
-                    ),const Padding(
-  padding: EdgeInsets.all(12),
-  child: Text(
-    "Delivery Settings",
-    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-  ),
-),
-
-
-
+                    ),
                   ],
                 ),
               ),
