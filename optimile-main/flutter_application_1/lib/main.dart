@@ -3,10 +3,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+
 import 'viewmodel/authvm.dart';
 import 'view/login.dart';
 import 'view/map_screen.dart';
-import 'view/admin.dart';
+// import 'view/admin.dart'; // ❌ REMOVE (we won’t open Flutter admin page)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,68 +44,61 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show loading while checking auth state
+        // Loading while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // User is logged in
-        if (snapshot.hasData && snapshot.data != null) {
-          final user = snapshot.data!;
+        // Not logged in
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const LoginPage();
+        }
 
-          // Check if email is verified
-          if (!user.emailVerified) {
-            // User is not verified, redirect to login
-            return const LoginPage();
-          }
+        final user = snapshot.data!;
 
-          // Fetch user role from Firestore
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get(),
-            builder: (context, userDoc) {
-              if (userDoc.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
+        // Email not verified -> force login
+        if (!user.emailVerified) {
+          return const LoginPage();
+        }
 
-              if (userDoc.hasError) {
-                return const LoginPage();
-              }
+        // Fetch user role from Firestore
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(),
+          builder: (context, userDoc) {
+            if (userDoc.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-              if (userDoc.hasData && userDoc.data != null) {
-                final userData = userDoc.data!.data() as Map<String, dynamic>?;
-
-                if (userData == null) {
-                  return const LoginPage();
-                }
-
-                final role = userData['role'] ?? 'driver';
-
-                // Navigate based on role
-                if (role == 'admin') {
-                  return const AdminDashboard();
-                }
-                return const MapScreen();
-              }
-
-              // Fallback to login
+            if (userDoc.hasError || !userDoc.hasData || userDoc.data == null) {
               return const LoginPage();
-            },
-          );
-        }
+            }
 
-        // User is not logged in
-        return const LoginPage();
+            final userData = userDoc.data!.data() as Map<String, dynamic>?;
+            if (userData == null) {
+              return const LoginPage();
+            }
+
+            final role = (userData['role'] ?? 'driver')
+                .toString()
+                .toLowerCase()
+                .trim();
+
+            // ✅ Admin -> go to login page (then login.dart will open web dashboard)
+            if (role == 'admin') {
+              return LoginPage(prefilledEmail: user.email);
+            }
+
+            // ✅ Driver -> Map screen
+            return const MapScreen();
+          },
+        );
       },
     );
   }

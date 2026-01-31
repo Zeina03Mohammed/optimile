@@ -19,11 +19,18 @@
 </head>
 <body>
 <div class="wrapper">
-    
+
+    <!-- ✅ Main Header (Fixes navbar toggle on mobile) -->
+    <div class="main-header">
         <div class="logo-header">
-            <a href="#" class="logo">Admin Dashboard</a>
+            <a href="/" class="logo">Admin Dashboard</a>
+
+            <!-- ✅ Mobile Sidebar Toggle -->
+            <button class="navbar-toggler sidenav-toggler ml-auto" type="button">
+                <span class="navbar-toggler-icon"></span>
+            </button>
         </div>
-    
+    </div>
 
     <div class="sidebar">
         <div class="scrollbar-inner sidebar-wrapper">
@@ -39,7 +46,6 @@
                 <li class="nav-item"><a href="/"><i class="la la-dashboard"></i><p>Dashboard</p></a></li>
                 <li class="nav-item active"><a href="drivers.html"><i class="fa fa-car"></i><p>Drivers</p></a></li>
                 <li class="nav-item"><a href="forms.html"><i class="la la-keyboard-o"></i><p>Forms</p></a></li>
-               
             </ul>
         </div>
     </div>
@@ -135,7 +141,6 @@
         </div>
 
         <footer class="footer">
-           
         </footer>
     </div>
 </div>
@@ -249,8 +254,6 @@ function renderDeliveriesList(deliveries) {
         return `<div class="muted">No deliveries assigned.</div>`;
     }
 
-    // We don't know your exact delivery fields, so we display common ones if they exist:
-    // id, package_id, status, created_at, completed_at, destination, address, etc.
     const items = deliveries.map(d => {
         const id = escapeHtml(d.id || '-');
         const pkg = escapeHtml(d.package_id || d.packageId || d.package || '-');
@@ -275,7 +278,6 @@ function renderDeliveriesList(deliveries) {
 }
 
 function formatTimestamp(ts) {
-    // Firestore timestamp may come as { _seconds, _nanoseconds } or Date-like
     try {
         if (ts && typeof ts === 'object' && typeof ts._seconds === 'number') {
             return new Date(ts._seconds * 1000).toLocaleString();

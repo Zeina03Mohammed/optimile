@@ -9,279 +9,396 @@
 	<link rel="stylesheet" href="assets/css/ready.css">
 	<link rel="stylesheet" href="assets/css/demo.css">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+	<style>
+		#task-complete{
+			width: 120px;
+			height: 120px;
+			margin: 0 auto;
+			display: block;
+		}
+
+		/* ✅ Remove profile image completely */
+		.sidebar .user .photo { display:none !important; }
+
+		/* ✅ clean name line */
+		.sidebar .user .info a span {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		/* ✅ dropdown contains ONLY logout */
+		#collapseExample .nav li { display:none; }
+		#collapseExample .nav li.logout-only { display:list-item; }
+	</style>
 </head>
 
 <body>
 	<div class="wrapper">
+
+		<!-- ✅ MAIN HEADER -->
 		<div class="main-header">
 			<div class="logo-header">
-				<a href="index.html" class="logo">
-					Admin Dashboard
-				</a>
-				<button class="navbar-toggler sidenav-toggler ml-auto" type="button" data-toggle="collapse" data-target="collapse" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+				<a href="/" class="logo">Admin Dashboard</a>
+
+				<button class="navbar-toggler sidenav-toggler ml-auto" type="button">
 					<span class="navbar-toggler-icon"></span>
 				</button>
+
 				<button class="topbar-toggler more"><i class="la la-ellipsis-v"></i></button>
 			</div>
 
 			<nav class="navbar navbar-header navbar-expand-lg"></nav>
+		</div>
 
-			<div class="sidebar">
-				<div class="scrollbar-inner sidebar-wrapper">
-					<div class="user">
-						<div class="photo">
-							<img src="assets/img/profile.jpg">
-						</div>
-						<div class="info">
-							<a class="" data-toggle="collapse" href="#collapseExample" aria-expanded="true">
-								<span>
-									Hizrian
-									<span class="user-level">Administrator</span>
-									<span class="caret"></span>
-								</span>
-							</a>
-							<div class="clearfix"></div>
+		<!-- ✅ SIDEBAR -->
+		<div class="sidebar">
+			<div class="scrollbar-inner sidebar-wrapper">
+				<div class="user">
+					<div class="info">
+						<a data-toggle="collapse" href="#collapseExample" aria-expanded="true">
+							<span>
+								<strong id="adminName">Admin</strong>
+								<span class="user-level">Administrator</span>
+								<span class="caret"></span>
+							</span>
+						</a>
+						<div class="clearfix"></div>
 
-							<div class="collapse in" id="collapseExample" aria-expanded="true">
-								<ul class="nav">
-									<li>
-										<a href="#profile">
-											<span class="link-collapse">My Profile</span>
-										</a>
-									</li>
-									<li>
-										<a href="#edit">
-											<span class="link-collapse">Edit Profile</span>
-										</a>
-									</li>
-									<li>
-										<a href="#settings">
-											<span class="link-collapse">Settings</span>
-										</a>
-									</li>
-								</ul>
-							</div>
-						</div>
-					</div>
-
-					<ul class="nav">
-						<li class="nav-item active">
-							<a href="index.html">
-								<i class="la la-dashboard"></i>
-								<p>Dashboard</p>
-								<span class="badge badge-count"></span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="drivers.html">
-								<i class="fa fa-car"></i>
-								<p>Drivers</p>
-								<span class="badge badge-count"></span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="forms.html">
-								<i class="la la-keyboard-o"></i>
-								<p>Forms</p>
-								<span class="badge badge-count"></span>
-							</a>
-						</li>
-					</ul>
-
-				</div>
-			</div>
-
-			<div class="main-panel">
-				<div class="content">
-					<div class="container-fluid">
-						<h4 class="page-title">Dashboard</h4>
-
-						<div class="row">
-							<div class="col-md-3">
-								<div class="card card-stats card-warning">
-									<div class="card-body ">
-										<div class="row">
-											<div class="col-5">
-												<div class="icon-big text-center">
-													<i class="la la-users"></i>
-												</div>
-											</div>
-											<div class="col-7 d-flex align-items-center">
-												<div class="numbers">
-													<p class="card-category">Drivers</p>
-													<h4 class="card-title" id="driversCount">--</h4>
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							<div class="col-md-3">
-								<div class="card card-stats card-success">
-									<div class="card-body ">
-										<div class="row">
-											<div class="col-5">
-												<div class="icon-big text-center">
-													<i class="la la-bar-chart"></i>
-												</div>
-											</div>
-											<div class="col-7 d-flex align-items-center">
-												<div class="numbers">
-													<p class="card-category">Packages</p>
-													<h4 class="card-title" id="packagesCount">--</h4>
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							<div class="col-md-3">
-								<div class="card card-stats card-danger">
-									<div class="card-body">
-										<div class="row">
-											<div class="col-5">
-												<div class="icon-big text-center">
-													<i class="la la-newspaper-o"></i>
-												</div>
-											</div>
-											<div class="col-7 d-flex align-items-center">
-												<div class="numbers">
-													<p class="card-category">Delivered</p>
-													<h4 class="card-title" id="deliveredCount">--</h4>
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							<div class="col-md-3">
-								<div class="card card-stats card-primary">
-									<div class="card-body ">
-										<div class="row">
-											<div class="col-5">
-												<div class="icon-big text-center">
-													<i class="la la-check-circle"></i>
-												</div>
-											</div>
-											<div class="col-7 d-flex align-items-center">
-												<div class="numbers">
-													<p class="card-category">Pending</p>
-													<h4 class="card-title" id="pendingCount">--</h4>
-												</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
+						<div class="collapse in" id="collapseExample" aria-expanded="true">
+							<ul class="nav">
+								<li class="logout-only">
+									<!-- ✅ CHANGED: do not link to dart file -->
+									<a href="#" id="logoutBtn">
+										<span class="link-collapse">
+											<i class="fa fa-right-from-bracket"></i> Logout
+										</span>
+									</a>
+								</li>
+							</ul>
 						</div>
 
-						<!-- Delivered Percentage Card -->
-						<div class="row">
-							<div class="col-md-3">
-								<div class="card">
-									<div class="card-header">
-										<h4 class="card-title">Orders</h4>
-										<p class="card-category">Complete</p>
-									</div>
-									<div class="card-body">
-										<div id="task-complete" class="chart-circle mt-4 mb-3"></div>
-
-										<div class="text-center mt-2">
-											<strong id="deliveredPercentText">--%</strong>
-										</div>
-									</div>
-									<div class="card-footer">
-										<div class="legend"><i class="la la-circle text-primary"></i> Completed</div>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						
 					</div>
 				</div>
-				
+
+				<ul class="nav">
+					<li class="nav-item active">
+						<a href="index.html">
+							<i class="la la-dashboard"></i>
+							<p>Dashboard</p>
+						</a>
+					</li>
+					<li class="nav-item">
+						<a href="drivers.html">
+							<i class="fa fa-car"></i>
+							<p>Drivers</p>
+						</a>
+					</li>
+					<li class="nav-item">
+						<a href="forms.html">
+							<i class="la la-keyboard-o"></i>
+							<p>Forms</p>
+						</a>
+					</li>
+				</ul>
+
 			</div>
 		</div>
+
+		<!-- ✅ MAIN PANEL -->
+		<div class="main-panel">
+			<div class="content">
+				<div class="container-fluid">
+					<h4 class="page-title">Dashboard</h4>
+
+					<div class="row">
+						<div class="col-md-3">
+							<div class="card card-stats card-warning">
+								<div class="card-body">
+									<div class="row">
+										<div class="col-5">
+											<div class="icon-big text-center">
+												<i class="la la-users"></i>
+											</div>
+										</div>
+										<div class="col-7 d-flex align-items-center">
+											<div class="numbers">
+												<p class="card-category">Drivers</p>
+												<h4 class="card-title" id="driversCount">--</h4>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="col-md-3">
+							<div class="card card-stats card-success">
+								<div class="card-body">
+									<div class="row">
+										<div class="col-5">
+											<div class="icon-big text-center">
+												<i class="la la-bar-chart"></i>
+											</div>
+										</div>
+										<div class="col-7 d-flex align-items-center">
+											<div class="numbers">
+												<p class="card-category">Packages</p>
+												<h4 class="card-title" id="packagesCount">--</h4>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="col-md-3">
+							<div class="card card-stats card-danger">
+								<div class="card-body">
+									<div class="row">
+										<div class="col-5">
+											<div class="icon-big text-center">
+												<i class="la la-newspaper-o"></i>
+											</div>
+										</div>
+										<div class="col-7 d-flex align-items-center">
+											<div class="numbers">
+												<p class="card-category">Delivered</p>
+												<h4 class="card-title" id="deliveredCount">--</h4>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="col-md-3">
+							<div class="card card-stats card-primary">
+								<div class="card-body">
+									<div class="row">
+										<div class="col-5">
+											<div class="icon-big text-center">
+												<i class="la la-check-circle"></i>
+											</div>
+										</div>
+										<div class="col-7 d-flex align-items-center">
+											<div class="numbers">
+												<p class="card-category">Pending</p>
+												<h4 class="card-title" id="pendingCount">--</h4>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- ✅ Orders Complete Circle -->
+					<div class="row">
+						<div class="col-md-3">
+							<div class="card">
+								<div class="card-header">
+									<h4 class="card-title">Orders</h4>
+									<p class="card-category">Complete</p>
+								</div>
+								<div class="card-body">
+									<div id="task-complete" class="chart-circle mt-4 mb-3"></div>
+
+									<div class="text-center mt-2">
+										<strong id="deliveredPercentText">--%</strong>
+									</div>
+								</div>
+								<div class="card-footer">
+									<div class="legend"><i class="la la-circle text-primary"></i> Completed</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
 	</div>
 
-	<!-- Modal -->
-	
+	<!-- Scripts -->
+	<script src="assets/js/core/jquery.3.2.1.min.js"></script>
+	<script src="assets/js/plugin/jquery-ui-1.12.1.custom/jquery-ui.min.js"></script>
+	<script src="assets/js/core/popper.min.js"></script>
+	<script src="assets/js/core/bootstrap.min.js"></script>
+	<script src="assets/js/plugin/chart-circle/circles.min.js"></script>
+	<script src="assets/js/plugin/jquery-scrollbar/jquery.scrollbar.min.js"></script>
+	<script src="assets/js/ready.min.js"></script>
+	<script src="assets/js/demo.js"></script>
+
+	<script>
+		/* =========================
+		   ✅ AUTH TOKEN HANDLING
+		   - Flutter opens: http://10.0.2.2:3000/?token=XXXX
+		   - Save token to localStorage
+		   - Send Authorization header on every request
+		   ========================= */
+		function getQueryParam(name) {
+			const url = new URL(window.location.href);
+			return url.searchParams.get(name);
+		}
+
+		function setToken(token) {
+			if (token && token.trim()) localStorage.setItem('admin_token', token.trim());
+		}
+
+		function getToken() {
+			return localStorage.getItem('admin_token');
+		}
+
+		// read token from URL once
+		(function initTokenFromUrl() {
+			const t = getQueryParam('token');
+			if (t) {
+				setToken(t);
+
+				// clean URL (remove token from address bar)
+				const url = new URL(window.location.href);
+				url.searchParams.delete('token');
+				window.history.replaceState({}, document.title, url.toString());
+			}
+		})();
+
+		// helper fetch with bearer token
+		async function authFetch(url, options = {}) {
+			const token = getToken();
+			const headers = Object.assign({}, options.headers || {});
+			if (token) headers['Authorization'] = `Bearer ${token}`;
+			return fetch(url, { ...options, headers, cache: 'no-store' });
+		}
+
+		/* =========================
+		   ✅ Render Circle
+		   ========================= */
+		function renderDeliveredCircle(percent) {
+			const p = Math.max(0, Math.min(100, percent));
+			const el = document.getElementById('task-complete');
+			if (!el) return;
+
+			el.innerHTML = '';
+
+			if (typeof Circles === 'undefined') {
+				console.error('Circles library not loaded.');
+				return;
+			}
+
+			Circles.create({
+				id: 'task-complete',
+				radius: 45,
+				value: p,
+				maxValue: 100,
+				width: 7,
+				text: p + '%',
+				duration: 600,
+				wrpClass: 'circles-wrp',
+				textClass: 'circles-text',
+				styleWrapper: true,
+				styleText: true
+			});
+
+			const t = document.getElementById('deliveredPercentText');
+			if (t) t.textContent = p + '%';
+		}
+
+		/* =========================
+		   ✅ Load stats
+		   ========================= */
+		async function loadDashboardStats() {
+			try {
+				const res = await authFetch('/api/stats');
+				if (!res.ok) throw new Error('Failed to fetch stats');
+				const data = await res.json();
+
+				document.getElementById('driversCount').textContent = data.totalDrivers ?? '--';
+				document.getElementById('packagesCount').textContent = data.totalPackages ?? '--';
+				document.getElementById('deliveredCount').textContent = data.deliveredPackages ?? '--';
+				document.getElementById('pendingCount').textContent = data.pendingPackages ?? '--';
+
+				const total = Number(data.totalPackages) || 0;
+				const delivered = Number(data.deliveredPackages) || 0;
+				const percent = total > 0 ? Math.round((delivered / total) * 100) : 0;
+
+				setTimeout(() => renderDeliveredCircle(percent), 100);
+			} catch (err) {
+				console.error(err);
+				renderDeliveredCircle(0);
+			}
+		}
+
+		/* =========================
+		   ✅ Load real admin name
+		   GET /api/me  -> { name, email, role }
+		   ========================= */
+		async function loadAdminName() {
+			try {
+				const token = getToken();
+				if (!token) {
+					// no token => go to login page
+					window.location.href = '/login.html';
+					return;
+				}
+
+				const res = await authFetch('/api/me');
+				if (res.status === 401) {
+					localStorage.removeItem('admin_token');
+					window.location.href = '/login.html';
+					return;
+				}
+
+				const me = await res.json();
+				const name = me?.name || me?.email || 'Admin';
+				document.getElementById('adminName').textContent = name;
+
+				// Optional: block non-admin
+				const role = String(me?.role || '').toLowerCase();
+				if (role && role !== 'admin') {
+					alert('Access denied: admin only');
+					localStorage.removeItem('admin_token');
+					window.location.href = '/login.html';
+				}
+			} catch (e) {
+				console.error('Failed to load admin name:', e);
+			}
+		}
+
+		/* =========================
+		   ✅ Logout
+		   ========================= */
+		async function logout() {
+			try {
+				await authFetch('/api/logout', { method: 'POST' });
+			} catch (e) {
+				console.error('Logout error:', e);
+			} finally {
+				localStorage.removeItem('admin_token');
+
+				// ✅ Go back to Flutter using Deep Link
+				// (Browser cannot open .dart files)
+				window.location.href = 'optimile://login';
+
+				// ✅ fallback page if deep link not handled
+				setTimeout(() => {
+					window.location.href = '/logged-out';
+				}, 800);
+			}
+		}
+
+		document.addEventListener('DOMContentLoaded', () => {
+			loadAdminName();
+			loadDashboardStats();
+
+			const btn = document.getElementById('logoutBtn');
+			if (btn) btn.addEventListener('click', (e) => {
+				e.preventDefault();
+				logout();
+			});
+		});
+	</script>
 </body>
-
-<script src="assets/js/core/jquery.3.2.1.min.js"></script>
-<script src="assets/js/plugin/jquery-ui-1.12.1.custom/jquery-ui.min.js"></script>
-<script src="assets/js/core/popper.min.js"></script>
-<script src="assets/js/core/bootstrap.min.js"></script>
-<script src="assets/js/plugin/chartist/chartist.min.js"></script>
-<script src="assets/js/plugin/chartist/plugin/chartist-plugin-tooltip.min.js"></script>
-<script src="assets/js/plugin/bootstrap-notify/bootstrap-notify.min.js"></script>
-<script src="assets/js/plugin/bootstrap-toggle/bootstrap-toggle.min.js"></script>
-<script src="assets/js/plugin/jquery-mapael/jquery.mapael.min.js"></script>
-<script src="assets/js/plugin/jquery-mapael/maps/world_countries.min.js"></script>
-<script src="assets/js/plugin/chart-circle/circles.min.js"></script>
-<script src="assets/js/plugin/jquery-scrollbar/jquery.scrollbar.min.js"></script>
-<script src="assets/js/ready.min.js"></script>
-<script src="assets/js/demo.js"></script>
-
-<script type="module" src="js/firebase.js"></script>
-
-<script>
-  function renderDeliveredCircle(percent) {
-    const p = Math.max(0, Math.min(100, percent));
-    const el = document.getElementById('task-complete');
-    if (el) el.innerHTML = '';
-
-    Circles.create({
-      id: 'task-complete',
-      radius: 45,
-      value: p,
-      maxValue: 100,
-      width: 7,
-      text: p + '%',
-      duration: 600,
-      wrpClass: 'circles-wrp',
-      textClass: 'circles-text',
-      styleWrapper: true,
-      styleText: true
-    });
-
-    const t = document.getElementById('deliveredPercentText');
-    if (t) t.textContent = p + '%';
-  }
-
-  async function loadDashboardStats() {
-    try {
-      const res = await fetch('/api/stats');
-      if (!res.ok) throw new Error('Failed to fetch stats');
-      const data = await res.json();
-
-      document.getElementById('driversCount').textContent = data.totalDrivers;
-      document.getElementById('packagesCount').textContent = data.totalPackages;
-      document.getElementById('deliveredCount').textContent = data.deliveredPackages;
-      document.getElementById('pendingCount').textContent = data.pendingPackages;
-
-      const total = Number(data.totalPackages) || 0;
-      const delivered = Number(data.deliveredPackages) || 0;
-      const percent = total > 0 ? Math.round((delivered / total) * 100) : 0;
-
-      renderDeliveredCircle(percent);
-    } catch (err) {
-      console.error('Dashboard stats error:', err);
-
-      document.getElementById('driversCount').textContent = 'Err';
-      document.getElementById('packagesCount').textContent = 'Err';
-      document.getElementById('deliveredCount').textContent = 'Err';
-      document.getElementById('pendingCount').textContent = 'Err';
-
-      renderDeliveredCircle(0);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', loadDashboardStats);
-</script>
-
 </html>
