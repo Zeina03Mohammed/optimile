@@ -6,6 +6,9 @@ import '/view/map_screen.dart';
 import '/view/signup.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// ✅ ADDED: to get Firebase ID token and pass it to Node dashboard
+import 'package:firebase_auth/firebase_auth.dart';
+
 class LoginPage extends StatefulWidget {
   final String? prefilledEmail;
 
@@ -38,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // ================= PASSWORD RESET =================
+  // Password Reset Dialog
   void _showPasswordResetDialog() {
     final resetEmailController = TextEditingController();
 
@@ -50,8 +53,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Enter your email address to receive a password reset link.',
-            ),
+                'Enter your email address to receive a password reset link.'),
             const SizedBox(height: 16),
             TextField(
               controller: resetEmailController,
@@ -85,10 +87,8 @@ class _LoginPageState extends State<LoginPage> {
               final result = await authVM.resetPassword(email);
 
               if (result == null) {
-                _showSnack(
-                  'Password reset email sent! Check your inbox.',
-                  Colors.green,
-                );
+                _showSnack('Password reset email sent! Check your inbox.',
+                    Colors.green);
               } else {
                 _showSnack(result);
               }
@@ -100,12 +100,26 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // ================= OPEN ADMIN DASHBOARD =================
-  // Opens admin-dashboard/Public/index.html
+  // Launch admin dashboard on your PC from Android emulator
   Future<void> _launchAdminDashboard() async {
-    final Uri url = Uri.parse('http://10.0.2.2:3000/');
+    // ✅ Android emulator uses 10.0.2.2 to access your PC (host machine)
 
     try {
+      // ✅ IMPORTANT: pass Firebase ID token so Node can call /api/me and show REAL admin name
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showSnack('No logged in user found.');
+        return;
+      }
+
+      final idToken = await user.getIdToken(true);
+
+      // ✅ Use /index.html to avoid "Cannot GET /index.html" issues if / is different
+      final Uri url = Uri.parse('http://10.0.2.2:3000/index.html').replace(
+        queryParameters: {'token': idToken},
+      );
+
+      // ✅ Use launchUrl directly (more reliable than canLaunchUrl on some devices)
       final opened = await launchUrl(
         url,
         mode: LaunchMode.externalApplication,
@@ -114,29 +128,32 @@ class _LoginPageState extends State<LoginPage> {
       if (opened) {
         _showSnack('Opening admin dashboard...', Colors.green);
       } else {
-        _showSnack('Could not open admin dashboard');
+        _showSnack('Could not open admin dashboard at 10.0.2.2:3000');
       }
     } catch (e) {
-      _showSnack('Error opening admin dashboard: $e');
+      _showSnack('Error opening admin dashboard: ${e.toString()}');
     }
   }
 
-  // ================= LOGIN =================
   void login() async {
     final authVM = Provider.of<AuthViewModel>(context, listen: false);
+
     final result =
         await authVM.login(emailController.text, passwordController.text);
 
     if (result.containsKey('error')) {
       _showSnack(result['error']);
-    } else if (result['emailNotVerified'] == true) {
+    } else if (result.containsKey('emailNotVerified') &&
+        result['emailNotVerified'] == true) {
       _showEmailVerificationDialog();
     } else {
-      final role = result['role'];
+      final role = (result['role'] ?? '').toString().toLowerCase().trim();
 
       if (role == 'admin') {
+        // Admin: Open dashboard in browser (with token)
         await _launchAdminDashboard();
       } else {
+        // Driver: Navigate to MapScreen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MapScreen()),
@@ -145,7 +162,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ================= EMAIL VERIFICATION =================
+  // Email Verification Dialog
   void _showEmailVerificationDialog() {
     showDialog(
       context: context,
@@ -153,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
       builder: (context) => AlertDialog(
         title: const Text('Email Not Verified'),
         content: const Text(
-          'Please verify your email address before logging in.',
+          'Please verify your email address before logging in. Check your inbox for the verification link.',
         ),
         actions: [
           TextButton(
@@ -225,10 +242,10 @@ class _LoginPageState extends State<LoginPage> {
                             const SizedBox(height: 32),
                             TextField(
                               controller: emailController,
+                              keyboardType: TextInputType.emailAddress,
                               decoration: InputDecoration(
                                 labelText: 'Email',
-                                prefixIcon:
-                                    const Icon(Icons.email_outlined),
+                                prefixIcon: const Icon(Icons.email_outlined),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -242,8 +259,7 @@ class _LoginPageState extends State<LoginPage> {
                               obscureText: _obscurePassword,
                               decoration: InputDecoration(
                                 labelText: 'Password',
-                                prefixIcon:
-                                    const Icon(Icons.lock_outline),
+                                prefixIcon: const Icon(Icons.lock_outline),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -252,8 +268,7 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   onPressed: () {
                                     setState(() {
-                                      _obscurePassword =
-                                          !_obscurePassword;
+                                      _obscurePassword = !_obscurePassword;
                                     });
                                   },
                                 ),
@@ -271,8 +286,7 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: _showPasswordResetDialog,
                                 child: const Text(
                                   'Forgot Password?',
-                                  style:
-                                      TextStyle(color: Colors.white),
+                                  style: TextStyle(color: Colors.white),
                                 ),
                               ),
                             ),
@@ -283,11 +297,9 @@ class _LoginPageState extends State<LoginPage> {
                               child: ElevatedButton(
                                 onPressed: isLoading ? null : login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.blue.shade700,
+                                  backgroundColor: Colors.blue.shade700,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                                 child: isLoading
@@ -298,23 +310,18 @@ class _LoginPageState extends State<LoginPage> {
                                     : const Text(
                                         'Sign In',
                                         style: TextStyle(
-                                          fontWeight:
-                                              FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white),
                                       ),
                               ),
                             ),
                             const SizedBox(height: 16),
                             TextButton(
                               onPressed: () async {
-                                final email =
-                                    await Navigator.push<String>(
+                                final email = await Navigator.push<String>(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const SignupPage(),
-                                  ),
+                                      builder: (_) => const SignupPage()),
                                 );
                                 if (email != null) {
                                   emailController.text = email;
@@ -322,8 +329,7 @@ class _LoginPageState extends State<LoginPage> {
                               },
                               child: const Text(
                                 "Don't have an account? Sign up",
-                                style:
-                                    TextStyle(color: Colors.white),
+                                style: TextStyle(color: Colors.white),
                               ),
                             ),
                           ],

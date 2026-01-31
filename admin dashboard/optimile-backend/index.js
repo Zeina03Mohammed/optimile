@@ -12,9 +12,18 @@ app.use(express.json());
 app.use('/assets', express.static(path.join(__dirname, '../Public/assets')));
 app.use('/js', express.static(path.join(__dirname, '../Public/js')));
 
+// ✅ IMPORTANT: serve ALL Public files so /index.html works
+app.use(express.static(path.join(__dirname, '../Public')));
+
 app.get('/', (req, res) =>
   res.sendFile(path.join(__dirname, '../Public/index.html'))
 );
+
+// ✅ ADD: allow direct access to /index.html (fix Cannot GET /index.html)
+app.get('/index.html', (req, res) =>
+  res.sendFile(path.join(__dirname, '../Public/index.html'))
+);
+
 app.get('/drivers.html', (req, res) =>
   res.sendFile(path.join(__dirname, '../Public/drivers.html'))
 );
@@ -37,36 +46,159 @@ admin.initializeApp({
 const db = admin.firestore();
 
 /* ===============================
-   ✅ API: DASHBOARD STATS
-   - Drivers = users where role == 'driver'
-   - Packages = deliveries total
-   - Pending  = deliveries where status == 'pending'
-   - Delivered = deliveries where status == 'done' OR has completed_at
+   ✅ AUTH MIDDLEWARE (Bearer Token)
+   Frontend sends:
+     Authorization: Bearer <Firebase ID Token>
    =============================== */
-app.get('/api/stats', async (req, res) => {
+async function requireAuth(req, res, next) {
+  try {
+    const header = req.headers.authorization || '';
+    const match = header.match(/^Bearer\s+(.+)$/i);
+
+    if (!match) {
+      // helpful debug
+      console.log('❌ Missing Authorization header for:', req.method, req.originalUrl);
+      return res.status(401).json({ error: 'Missing Authorization Bearer token' });
+    }
+
+    const idToken = match[1].trim();
+    const decoded = await admin.auth().verifyIdToken(idToken);
+
+    req.user = decoded; // { uid, email, ... }
+    next();
+  } catch (err) {
+    console.error('Auth error:', err.message);
+    return res.status(401).json({ error: 'Invalid or expired token', details: err.message });
+  }
+}
+
+/* ===============================
+   ✅ ADMIN CHECK
+   IMPORTANT FIX:
+   - First: try users/{uid}
+   - If not found: fallback search users where email == decoded.email
+   This solves the common mismatch between Auth UID and Firestore docId.
+   =============================== */
+async function requireAdmin(req, res, next) {
+  try {
+    const uid = req.user?.uid;
+    const email = (req.user?.email || '').toLowerCase();
+
+    if (!uid) return res.status(401).json({ error: 'Not authenticated' });
+
+    // 1) Try doc id = uid
+    let snap = await db.collection('users').doc(uid).get();
+
+    // 2) Fallback: match by email
+    if (!snap.exists && email) {
+      const emailSnap = await db
+        .collection('users')
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+
+      if (!emailSnap.empty) {
+        snap = emailSnap.docs[0];
+      }
+    }
+
+    if (!snap.exists && snap.data === undefined) {
+      console.log('❌ Admin check: user not found in Firestore. uid=', uid, 'email=', email);
+      return res.status(403).json({ error: 'User not found in Firestore (uid/email not matched)' });
+    }
+
+    const data = snap.data ? snap.data() : snap.data(); // handles both DocumentSnapshot and QueryDocumentSnapshot
+    const role = String(data?.role || '').toLowerCase();
+
+    if (role !== 'admin') {
+      console.log('❌ Admin check failed. role=', role, 'uid=', uid, 'email=', email);
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    req.profile = { id: snap.id, ...(data || {}) };
+    next();
+  } catch (err) {
+    console.error('Admin check error:', err.message);
+    return res.status(500).json({ error: 'Server error', details: err.message });
+  }
+}
+
+/* ===============================
+   ✅ API: ME (for sidebar admin name)
+   GET /api/me  -> { id, name, email, role }
+   =============================== */
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const email = (req.user.email || '').toLowerCase();
+
+    // try uid first
+    let snap = await db.collection('users').doc(uid).get();
+
+    // fallback by email
+    if (!snap.exists && email) {
+      const emailSnap = await db
+        .collection('users')
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+
+      if (!emailSnap.empty) {
+        snap = emailSnap.docs[0];
+      }
+    }
+
+    if (!snap.exists && snap.data === undefined) {
+      return res.json({
+        id: uid,
+        name: req.user.name || null,
+        email: req.user.email || null,
+        role: null,
+      });
+    }
+
+    const data = snap.data ? snap.data() : snap.data();
+    res.json({
+      id: snap.id,
+      name: data?.name || null,
+      email: data?.email || req.user.email || null,
+      role: data?.role || null,
+    });
+  } catch (err) {
+    console.error('/api/me error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ===============================
+   ✅ API: LOGOUT
+   (No server session; frontend clears token)
+   =============================== */
+app.post('/api/logout', (req, res) => {
+  res.json({ message: 'Logged out (client token cleared)' });
+});
+
+/* ===============================
+   ✅ API: DASHBOARD STATS
+   =============================== */
+app.get('/api/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
     const usersRef = db.collection('users');
     const deliveriesRef = db.collection('deliveries');
 
-    // Total drivers
     const driversSnap = await usersRef.where('role', '==', 'driver').get();
     const totalDrivers = driversSnap.size;
 
-    // Total packages
     const deliveriesSnap = await deliveriesRef.get();
     const totalPackages = deliveriesSnap.size;
 
-    // Pending packages (status == pending)
     const pendingSnap = await deliveriesRef.where('status', '==', 'pending').get();
     const pendingPackages = pendingSnap.size;
 
-    // Delivered packages:
-    // 1) status == done
     const deliveredByStatusSnap = await deliveriesRef
       .where('status', '==', 'done')
       .get();
 
-    // Combine delivered without double-counting (done OR completed_at)
     const deliveredSet = new Set();
     deliveredByStatusSnap.forEach(doc => deliveredSet.add(doc.id));
 
@@ -92,7 +224,7 @@ app.get('/api/stats', async (req, res) => {
 /* ===============================
    API: USERS (GET ALL)
    =============================== */
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const snap = await db.collection('users').get();
     const users = snap.docs.map(doc => ({
@@ -107,10 +239,8 @@ app.get('/api/users', async (req, res) => {
 
 /* ===============================
    ✅ API: CREATE USER (admin or driver)
-   Body: { name, email, phone, role, password }
-   Stores: password_hash
    =============================== */
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name, email, phone, role, password } = req.body;
 
@@ -124,7 +254,7 @@ app.post('/api/users', async (req, res) => {
 
     const exists = await db
       .collection('users')
-      .where('email', '==', String(email).trim())
+      .where('email', '==', String(email).trim().toLowerCase())
       .limit(1)
       .get();
 
@@ -136,7 +266,7 @@ app.post('/api/users', async (req, res) => {
 
     const docRef = await db.collection('users').add({
       name: String(name).trim(),
-      email: String(email).trim(),
+      email: String(email).trim().toLowerCase(),
       phone: phone ? String(phone).trim() : '',
       role: String(role).toLowerCase(),
       password_hash,
@@ -150,10 +280,9 @@ app.post('/api/users', async (req, res) => {
 });
 
 /* ===============================
-   ✅ API: UPDATE USER (admin / driver)
-   If password is provided => update password_hash
+   ✅ API: UPDATE USER
    =============================== */
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, phone, role, password } = req.body;
@@ -164,7 +293,7 @@ app.put('/api/users/:id', async (req, res) => {
 
     const updateData = {
       name: String(name).trim(),
-      email: String(email).trim(),
+      email: String(email).trim().toLowerCase(),
       phone: phone ? String(phone).trim() : '',
       ...(role ? { role: String(role).toLowerCase() } : {}),
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -186,9 +315,9 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 /* ===============================
-   API: DELETE USER (admin or driver)
+   API: DELETE USER
    =============================== */
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await db.collection('users').doc(id).delete();
@@ -201,7 +330,7 @@ app.delete('/api/users/:id', async (req, res) => {
 /* ===============================
    API: DRIVER UPDATE (edit only)
    =============================== */
-app.put('/api/drivers/:id', async (req, res) => {
+app.put('/api/drivers/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, phone } = req.body;
@@ -212,7 +341,7 @@ app.put('/api/drivers/:id', async (req, res) => {
 
     await db.collection('users').doc(id).update({
       name: String(name).trim(),
-      email: String(email).trim(),
+      email: String(email).trim().toLowerCase(),
       phone: phone ? String(phone).trim() : '',
       role: 'driver',
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -227,7 +356,7 @@ app.put('/api/drivers/:id', async (req, res) => {
 /* ===============================
    API: DRIVER DELETE (single)
    =============================== */
-app.delete('/api/drivers/:id', async (req, res) => {
+app.delete('/api/drivers/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await db.collection('users').doc(id).delete();
@@ -240,7 +369,7 @@ app.delete('/api/drivers/:id', async (req, res) => {
 /* ===============================
    API: DELIVERIES (ALL)
    =============================== */
-app.get('/api/deliveries', async (req, res) => {
+app.get('/api/deliveries', requireAuth, requireAdmin, async (req, res) => {
   try {
     const snap = await db.collection('deliveries').get();
     const deliveries = snap.docs.map(doc => ({
@@ -255,15 +384,12 @@ app.get('/api/deliveries', async (req, res) => {
 
 /* ===============================
    ✅ API: PACKAGE STATUS
-   GET /api/package-status/:packageId
-   status "done" => delivered
    =============================== */
-app.get('/api/package-status/:packageId', async (req, res) => {
+app.get('/api/package-status/:packageId', requireAuth, requireAdmin, async (req, res) => {
   try {
     const packageId = String(req.params.packageId || '').trim();
     if (!packageId) return res.status(400).json({ error: 'packageId is required' });
 
-    // 1) Try doc ID
     const doc = await db.collection('deliveries').doc(packageId).get();
     if (doc.exists) {
       const data = doc.data() || {};
@@ -272,7 +398,6 @@ app.get('/api/package-status/:packageId', async (req, res) => {
       return res.json({ found: true, id: doc.id, status: normalized === 'done' ? 'delivered' : normalized });
     }
 
-    // 2) Try common fields
     const fields = ['package_id', 'packageId', 'package'];
     for (const f of fields) {
       const snap = await db.collection('deliveries').where(f, '==', packageId).limit(1).get();
@@ -293,9 +418,8 @@ app.get('/api/package-status/:packageId', async (req, res) => {
 
 /* ===============================
    API: DRIVERS WITH DELIVERIES
-   deliveredCount: status === "done" OR completed_at
    =============================== */
-app.get('/api/drivers-with-deliveries', async (req, res) => {
+app.get('/api/drivers-with-deliveries', requireAuth, requireAdmin, async (req, res) => {
   try {
     const usersSnap = await db.collection('users').get();
     const deliveriesSnap = await db.collection('deliveries').get();
@@ -335,6 +459,13 @@ app.get('/api/drivers-with-deliveries', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/* ===============================
+   ✅ OPTIONAL: health check (helps debug)
+   =============================== */
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, message: 'Server is running' });
 });
 
 /* ===============================

@@ -13,37 +13,20 @@
 <body>
 	<div class="wrapper">
 
-		<!-- ✅ ADDED: Main Header (Required on mobile to open sidebar) -->
+		<!-- ✅ MAIN HEADER (ADDED to fix navbar like index.html) -->
 		<div class="main-header">
 			<div class="logo-header">
-				<a href="/" class="logo">
-					Optimile Admin
-				</a>
+				<a href="/" class="logo">Admin Dashboard</a>
 
-				<button class="navbar-toggler sidenav-toggler ml-auto" type="button">
-					<span class="navbar-toggler-icon">
-						<i class="la la-bars"></i>
-					</span>
+				<button id="sidebarToggleBtn" class="navbar-toggler sidenav-toggler ml-auto" type="button">
+					<span class="navbar-toggler-icon"></span>
 				</button>
 
-				<button class="topbar-toggler more">
-					<i class="la la-ellipsis-v"></i>
-				</button>
+				<button id="topbarToggleBtn" class="topbar-toggler more"><i class="la la-ellipsis-v"></i></button>
 			</div>
 
-			<nav class="navbar navbar-header navbar-expand-lg">
-				<div class="container-fluid">
-					<ul class="navbar-nav topbar-nav ml-md-auto align-items-center">
-						<li class="nav-item">
-							<a class="nav-link" href="forms.html">
-								<i class="la la-keyboard-o"></i> Forms
-							</a>
-						</li>
-					</ul>
-				</div>
-			</nav>
+			<nav class="navbar navbar-header navbar-expand-lg"></nav>
 		</div>
-		<!-- ✅ END ADDED HEADER -->
 
 		<!-- Sidebar -->
 		<div class="sidebar">
@@ -276,11 +259,45 @@
 	<script src="assets/js/ready.min.js"></script>
 
 	<script>
+	/* =========================
+	   ✅ TOKEN HANDLING + authFetch (ADDED so DB loads work with requireAuth)
+	   ========================= */
+	function getQueryParam(name) {
+		const url = new URL(window.location.href);
+		return url.searchParams.get(name);
+	}
+
+	function setToken(token) {
+		if (token && token.trim()) localStorage.setItem('admin_token', token.trim());
+	}
+
+	function getToken() {
+		return localStorage.getItem('admin_token');
+	}
+
+	(function initTokenFromUrl() {
+		const t = getQueryParam('token');
+		if (t) {
+			setToken(t);
+
+			const url = new URL(window.location.href);
+			url.searchParams.delete('token');
+			window.history.replaceState({}, document.title, url.toString());
+		}
+	})();
+
+	async function authFetch(url, options = {}) {
+		const token = getToken();
+		const headers = Object.assign({}, options.headers || {});
+		if (token) headers['Authorization'] = `Bearer ${token}`;
+		return fetch(url, { ...options, headers, cache: 'no-store' });
+	}
+
 	/* ===============================
 	   Users fetch helper
 	   =============================== */
 	async function fetchUsers() {
-		const res = await fetch('/api/users', { cache: 'no-store' });
+		const res = await authFetch('/api/users', { cache: 'no-store' });
 		if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
 		const users = await res.json();
 		if (!Array.isArray(users)) throw new Error('Unexpected response from /api/users');
@@ -433,7 +450,7 @@
 		if (!id) { err.textContent='No driver selected.'; err.style.display='block'; return; }
 		if (!name || !email) { err.textContent='Name and email are required.'; err.style.display='block'; return; }
 
-		const res = await fetch(`/api/drivers/${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/drivers/${encodeURIComponent(id)}`, {
 			method:'PUT',
 			headers:{'Content-Type':'application/json'},
 			body: JSON.stringify({ name, email, phone })
@@ -454,7 +471,7 @@
 		const label = select.options[select.selectedIndex]?.textContent || id;
 		if (!confirm(`Delete this driver?\n\n${label}`)) return;
 
-		const res = await fetch(`/api/drivers/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const res = await authFetch(`/api/drivers/${encodeURIComponent(id)}`, { method:'DELETE' });
 		const data = await res.json().catch(()=>({}));
 		if (!res.ok) return alert(data.error || 'Delete failed.');
 
@@ -491,7 +508,7 @@
 		if (!id) { err.textContent='No admin selected.'; err.style.display='block'; return; }
 		if (!name || !email) { err.textContent='Name and email are required.'; err.style.display='block'; return; }
 
-		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+		const res = await authFetch(`/api/users/${encodeURIComponent(id)}`, {
 			method:'PUT',
 			headers:{'Content-Type':'application/json'},
 			body: JSON.stringify({ name, email, phone, role:'admin' })
@@ -512,7 +529,7 @@
 		const label = select.options[select.selectedIndex]?.textContent || id;
 		if (!confirm(`Delete this admin?\n\n${label}`)) return;
 
-		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const res = await authFetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
 		const data = await res.json().catch(()=>({}));
 		if (!res.ok) return alert(data.error || 'Delete failed.');
 
@@ -579,13 +596,13 @@
 
 		let res;
 		if (!id) {
-			res = await fetch('/api/users', {
+			res = await authFetch('/api/users', {
 				method:'POST',
 				headers:{'Content-Type':'application/json'},
 				body: JSON.stringify({ name, email, phone, role, password })
 			});
 		} else {
-			res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+			res = await authFetch(`/api/users/${encodeURIComponent(id)}`, {
 				method:'PUT',
 				headers:{'Content-Type':'application/json'},
 				body: JSON.stringify({ name, email, phone, role, password })
@@ -609,7 +626,7 @@
 		const label = select.options[select.selectedIndex]?.textContent || id;
 		if (!confirm(`Delete this user?\n\n${label}`)) return;
 
-		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const res = await authFetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
 		const data = await res.json().catch(()=>({}));
 		if (!res.ok) return alert(data.error || 'Delete failed.');
 
@@ -657,7 +674,7 @@
 		setPackageLabel('Checking status...', 'muted');
 
 		try {
-			const res = await fetch(`/api/package-status/${encodeURIComponent(packageId)}`, { cache: 'no-store' });
+			const res = await authFetch(`/api/package-status/${encodeURIComponent(packageId)}`, { cache: 'no-store' });
 			const data = await res.json().catch(() => ({}));
 
 			if (!res.ok) {
@@ -699,10 +716,37 @@
 	document.getElementById('userModalSaveBtn').addEventListener('click', saveUser);
 	document.getElementById('deleteUserBtn').addEventListener('click', deleteSelectedUser);
 
+	// ✅ Sidebar toggles (ADDED)
+	function forceSidebarToggle() {
+		const btn = document.getElementById('sidebarToggleBtn');
+		if (!btn) return;
+
+		btn.addEventListener('click', function () {
+			document.body.classList.toggle('sidebar_minimize');
+			document.body.classList.toggle('sidenav-toggled');
+
+			const sidebar = document.querySelector('.sidebar');
+			if (sidebar) sidebar.classList.toggle('toggled');
+		});
+	}
+
+	function forceTopbarToggle() {
+		const btn = document.getElementById('topbarToggleBtn');
+		if (!btn) return;
+
+		btn.addEventListener('click', function () {
+			document.body.classList.toggle('topbar_open');
+		});
+	}
+
 	// Initial load
-	loadDriverDropdown();
-	loadAdminDropdown();
-	loadUserDropdown();
+	document.addEventListener('DOMContentLoaded', () => {
+		forceSidebarToggle();
+		forceTopbarToggle();
+		loadDriverDropdown();
+		loadAdminDropdown();
+		loadUserDropdown();
+	});
 	</script>
 
 </body>

@@ -69,8 +69,7 @@
 						<div class="collapse in" id="collapseExample" aria-expanded="true">
 							<ul class="nav">
 								<li class="logout-only">
-									<!-- ✅ CHANGED: do not link to dart file -->
-									<a href="#" id="logoutBtn">
+									<a href="../../flutter_application_1/lib/login&signup.dart" id="logoutBtn">
 										<span class="link-collapse">
 											<i class="fa fa-right-from-bracket"></i> Logout
 										</span>
@@ -339,15 +338,12 @@
 			try {
 				const token = getToken();
 				if (!token) {
-					// no token => go to login page
-					window.location.href = '/login.html';
 					return;
 				}
 
 				const res = await authFetch('/api/me');
 				if (res.status === 401) {
 					localStorage.removeItem('admin_token');
-					window.location.href = '/login.html';
 					return;
 				}
 
@@ -360,7 +356,7 @@
 				if (role && role !== 'admin') {
 					alert('Access denied: admin only');
 					localStorage.removeItem('admin_token');
-					window.location.href = '/login.html';
+					return;
 				}
 			} catch (e) {
 				console.error('Failed to load admin name:', e);
@@ -377,15 +373,7 @@
 				console.error('Logout error:', e);
 			} finally {
 				localStorage.removeItem('admin_token');
-
-				// ✅ Go back to Flutter using Deep Link
-				// (Browser cannot open .dart files)
-				window.location.href = 'optimile://login';
-
-				// ✅ fallback page if deep link not handled
-				setTimeout(() => {
-					window.location.href = '/logged-out';
-				}, 800);
+				window.location.href = '../../flutter_application_1';
 			}
 		}
 
