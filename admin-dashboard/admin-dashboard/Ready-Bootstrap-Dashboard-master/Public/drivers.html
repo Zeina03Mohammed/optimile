@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title>Admin Dashboard - Drivers</title>
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no' name='viewport' />
+
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i">
+    <link rel="stylesheet" href="assets/css/ready.css">
+    <link rel="stylesheet" href="assets/css/demo.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+      .deliveries-box { background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:12px; }
+      .deliveries-box ul { margin:0; padding-left:18px; }
+      .muted { color:#6c757d; }
+      .badge-soft { background:#eef2ff; color:#334155; border:1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    
+        <div class="logo-header">
+            <a href="#" class="logo">Admin Dashboard</a>
+        </div>
+    
+
+    <div class="sidebar">
+        <div class="scrollbar-inner sidebar-wrapper">
+            <div class="user">
+                <div class="photo"><img src="assets/img/profile.jpg" alt="Profile"></div>
+                <div class="info">
+                    <a data-toggle="collapse" href="#collapseExample">
+                        <span>Admin<span class="user-level">Administrator</span></span>
+                    </a>
+                </div>
+            </div>
+            <ul class="nav">
+                <li class="nav-item"><a href="/"><i class="la la-dashboard"></i><p>Dashboard</p></a></li>
+                <li class="nav-item active"><a href="drivers.html"><i class="fa fa-car"></i><p>Drivers</p></a></li>
+                <li class="nav-item"><a href="forms.html"><i class="la la-keyboard-o"></i><p>Forms</p></a></li>
+               
+            </ul>
+        </div>
+    </div>
+
+    <div class="main-panel">
+        <div class="content">
+            <div class="container-fluid">
+                <h4 class="page-title">Drivers Overview</h4>
+
+                <div id="drivers-alert" class="alert alert-danger" style="display:none;"></div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card card-stats card-primary">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-5 text-center"><i class="la la-users la-2x"></i></div>
+                                    <div class="col-7">
+                                        <p class="card-category">Total Drivers</p>
+                                        <h4 class="card-title" id="total-drivers">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="card card-stats card-success">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-5 text-center"><i class="la la-box la-2x"></i></div>
+                                    <div class="col-7">
+                                        <p class="card-category">Delivered (All Drivers)</p>
+                                        <h4 class="card-title" id="total-delivered">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="card card-stats card-info">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-5 text-center"><i class="la la-truck la-2x"></i></div>
+                                    <div class="col-7">
+                                        <p class="card-category">Assigned (All Drivers)</p>
+                                        <h4 class="card-title" id="total-assigned">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 text-right">
+                        <button id="refresh-btn" class="btn btn-primary btn-sm" type="button">
+                            <i class="fa fa-rotate-right"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header"><h4 class="card-title">Drivers Info</h4></div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>Phone</th>
+                                                <th>Assigned</th>
+                                                <th>Delivered</th>
+                                                <th style="width:160px;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="drivers-table-body">
+                                            <tr><td colspan="6">Loading...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <small class="text-muted">
+                                    Open from <b>http://localhost:3000/drivers.html</b> (not file://).
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <footer class="footer">
+           
+        </footer>
+    </div>
+</div>
+
+<script src="assets/js/core/jquery.3.2.1.min.js"></script>
+<script src="assets/js/core/popper.min.js"></script>
+<script src="assets/js/core/bootstrap.min.js"></script>
+<script src="assets/js/ready.min.js"></script>
+
+<script>
+async function loadDrivers() {
+    const tbody = document.getElementById('drivers-table-body');
+    const totalDriversElem = document.getElementById('total-drivers');
+    const totalDeliveredElem = document.getElementById('total-delivered');
+    const totalAssignedElem = document.getElementById('total-assigned');
+    const alertBox = document.getElementById('drivers-alert');
+
+    alertBox.style.display = 'none';
+    alertBox.textContent = '';
+    tbody.innerHTML = `<tr><td colspan="6">Loading...</td></tr>`;
+
+    try {
+        const res = await fetch('/api/drivers-with-deliveries', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+
+        const drivers = await res.json();
+        if (!Array.isArray(drivers)) throw new Error('Unexpected API response. Expected an array.');
+
+        tbody.innerHTML = '';
+
+        totalDriversElem.textContent = drivers.length;
+
+        let sumAssigned = 0;
+        let sumDelivered = 0;
+
+        if (drivers.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6">No drivers found.</td></tr>`;
+            totalAssignedElem.textContent = '0';
+            totalDeliveredElem.textContent = '0';
+            return;
+        }
+
+        drivers.forEach((d, idx) => {
+            const assignedCount = Number(d.assignedCount || 0);
+            const deliveredCount = Number(d.deliveredCount || 0);
+            sumAssigned += assignedCount;
+            sumDelivered += deliveredCount;
+
+            const detailsRowId = `deliveries-row-${idx}`;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${escapeHtml(d.name || '-')}</td>
+                <td>${escapeHtml(d.email || '-')}</td>
+                <td>${escapeHtml(d.phone || '-')}</td>
+                <td><span class="badge badge-soft">${assignedCount}</span></td>
+                <td><span class="badge badge-success">${deliveredCount}</span></td>
+                <td>
+                    <button class="btn btn-info btn-sm" type="button" data-toggle="details" data-target="${detailsRowId}">
+                        View Packages
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+
+            const deliveriesRow = document.createElement('tr');
+            deliveriesRow.id = detailsRowId;
+            deliveriesRow.style.display = 'none';
+
+            const deliveriesHtml = renderDeliveriesList(d.deliveries || []);
+            deliveriesRow.innerHTML = `
+                <td colspan="6">
+                    <div class="deliveries-box">
+                        <div class="mb-2"><b>Assigned Deliveries / Packages</b> <span class="muted">(Driver: ${escapeHtml(d.name || '-')} )</span></div>
+                        ${deliveriesHtml}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(deliveriesRow);
+        });
+
+        totalAssignedElem.textContent = sumAssigned;
+        totalDeliveredElem.textContent = sumDelivered;
+
+        // attach toggle handlers
+        tbody.querySelectorAll('button[data-toggle="details"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.getAttribute('data-target');
+                const tr = document.getElementById(targetId);
+                const isOpen = tr.style.display !== 'none';
+                tr.style.display = isOpen ? 'none' : 'table-row';
+                btn.textContent = isOpen ? 'View Packages' : 'Hide Packages';
+                btn.classList.toggle('btn-info', isOpen);
+                btn.classList.toggle('btn-secondary', !isOpen);
+            });
+        });
+
+    } catch (err) {
+        console.error(err);
+        alertBox.textContent = "Failed to load drivers/packages. Make sure backend is running and /api/drivers-with-deliveries works.";
+        alertBox.style.display = 'block';
+        tbody.innerHTML = `<tr><td colspan="6">Error loading data.</td></tr>`;
+        totalDriversElem.textContent = '0';
+        totalAssignedElem.textContent = '0';
+        totalDeliveredElem.textContent = '0';
+    }
+}
+
+function renderDeliveriesList(deliveries) {
+    if (!Array.isArray(deliveries) || deliveries.length === 0) {
+        return `<div class="muted">No deliveries assigned.</div>`;
+    }
+
+    // We don't know your exact delivery fields, so we display common ones if they exist:
+    // id, package_id, status, created_at, completed_at, destination, address, etc.
+    const items = deliveries.map(d => {
+        const id = escapeHtml(d.id || '-');
+        const pkg = escapeHtml(d.package_id || d.packageId || d.package || '-');
+        const status = escapeHtml(d.status || (d.completed_at ? 'completed' : 'pending'));
+        const created = d.created_at ? formatTimestamp(d.created_at) : '';
+        const completed = d.completed_at ? formatTimestamp(d.completed_at) : '';
+        const driverEmail = escapeHtml(d.driver_email || '');
+
+        return `
+          <li>
+            <b>Delivery:</b> ${id}
+            ${pkg !== '-' ? ` | <b>Package:</b> ${pkg}` : ''}
+            | <b>Status:</b> ${status}
+            ${created ? ` | <b>Created:</b> ${created}` : ''}
+            ${completed ? ` | <b>Completed:</b> ${completed}` : ''}
+            ${driverEmail ? ` | <span class="muted">${driverEmail}</span>` : ''}
+          </li>
+        `;
+    }).join('');
+
+    return `<ul>${items}</ul>`;
+}
+
+function formatTimestamp(ts) {
+    // Firestore timestamp may come as { _seconds, _nanoseconds } or Date-like
+    try {
+        if (ts && typeof ts === 'object' && typeof ts._seconds === 'number') {
+            return new Date(ts._seconds * 1000).toLocaleString();
+        }
+        const d = new Date(ts);
+        if (!isNaN(d.getTime())) return d.toLocaleString();
+    } catch {}
+    return '';
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+loadDrivers();
+document.getElementById('refresh-btn').addEventListener('click', loadDrivers);
+</script>
+</body>
+</html>

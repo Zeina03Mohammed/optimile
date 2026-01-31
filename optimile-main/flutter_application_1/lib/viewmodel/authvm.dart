@@ -55,6 +55,7 @@ class AuthViewModel extends ChangeNotifier {
   }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   // ================= PASSWORD RESET =================
   // 🔹 ADDED: Password reset method
   Future<String?> resetPassword(String email) async {
@@ -72,6 +73,8 @@ class AuthViewModel extends ChangeNotifier {
     setLoading(false);
     return result;
 =======
+=======
+>>>>>>> Stashed changes
   // ================= RESET PASSWORD =================
   // Used in: lib/view/login.dart
   Future<String?> resetPassword(String email) async {
@@ -94,6 +97,9 @@ class AuthViewModel extends ChangeNotifier {
     } finally {
       setLoading(false);
     }
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   }
 
