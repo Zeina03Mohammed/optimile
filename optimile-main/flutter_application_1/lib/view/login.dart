@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import '/viewmodel/authvm.dart';
 import '/view/map_screen.dart';
 import '/view/signup.dart';
@@ -38,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Password Reset Dialog
+  // ================= PASSWORD RESET =================
   void _showPasswordResetDialog() {
     final resetEmailController = TextEditingController();
 
@@ -50,7 +50,8 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-                'Enter your email address to receive a password reset link.'),
+              'Enter your email address to receive a password reset link.',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: resetEmailController,
@@ -84,8 +85,10 @@ class _LoginPageState extends State<LoginPage> {
               final result = await authVM.resetPassword(email);
 
               if (result == null) {
-                _showSnack('Password reset email sent! Check your inbox.',
-                    Colors.green);
+                _showSnack(
+                  'Password reset email sent! Check your inbox.',
+                  Colors.green,
+                );
               } else {
                 _showSnack(result);
               }
@@ -97,25 +100,28 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Launch admin dashboard at localhost:3000
+  // ================= OPEN ADMIN DASHBOARD =================
+  // Opens admin-dashboard/Public/index.html
   Future<void> _launchAdminDashboard() async {
-    final Uri url = Uri.parse('http://localhost:3000');
+    final Uri url = Uri.parse('http://10.0.2.2:3000/');
 
     try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(
-          url,
-          mode: LaunchMode.externalApplication,
-        );
+      final opened = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (opened) {
         _showSnack('Opening admin dashboard...', Colors.green);
       } else {
-        _showSnack('Could not open admin dashboard at localhost:3000');
+        _showSnack('Could not open admin dashboard');
       }
     } catch (e) {
-      _showSnack('Error opening admin dashboard: ${e.toString()}');
+      _showSnack('Error opening admin dashboard: $e');
     }
   }
 
+  // ================= LOGIN =================
   void login() async {
     final authVM = Provider.of<AuthViewModel>(context, listen: false);
     final result =
@@ -123,17 +129,14 @@ class _LoginPageState extends State<LoginPage> {
 
     if (result.containsKey('error')) {
       _showSnack(result['error']);
-    } else if (result.containsKey('emailNotVerified') &&
-        result['emailNotVerified'] == true) {
+    } else if (result['emailNotVerified'] == true) {
       _showEmailVerificationDialog();
     } else {
       final role = result['role'];
 
       if (role == 'admin') {
-        // Admin: Open localhost:3000 in browser
         await _launchAdminDashboard();
       } else {
-        // Driver: Navigate to MapScreen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MapScreen()),
@@ -142,7 +145,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Email Verification Dialog
+  // ================= EMAIL VERIFICATION =================
   void _showEmailVerificationDialog() {
     showDialog(
       context: context,
@@ -150,7 +153,7 @@ class _LoginPageState extends State<LoginPage> {
       builder: (context) => AlertDialog(
         title: const Text('Email Not Verified'),
         content: const Text(
-          'Please verify your email address before logging in. Check your inbox for the verification link.',
+          'Please verify your email address before logging in.',
         ),
         actions: [
           TextButton(
@@ -193,7 +196,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.18),
@@ -222,10 +225,10 @@ class _LoginPageState extends State<LoginPage> {
                             const SizedBox(height: 32),
                             TextField(
                               controller: emailController,
-                              keyboardType: TextInputType.emailAddress,
                               decoration: InputDecoration(
                                 labelText: 'Email',
-                                prefixIcon: const Icon(Icons.email_outlined),
+                                prefixIcon:
+                                    const Icon(Icons.email_outlined),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -239,7 +242,8 @@ class _LoginPageState extends State<LoginPage> {
                               obscureText: _obscurePassword,
                               decoration: InputDecoration(
                                 labelText: 'Password',
-                                prefixIcon: const Icon(Icons.lock_outline),
+                                prefixIcon:
+                                    const Icon(Icons.lock_outline),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -248,7 +252,8 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   onPressed: () {
                                     setState(() {
-                                      _obscurePassword = !_obscurePassword;
+                                      _obscurePassword =
+                                          !_obscurePassword;
                                     });
                                   },
                                 ),
@@ -266,7 +271,8 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: _showPasswordResetDialog,
                                 child: const Text(
                                   'Forgot Password?',
-                                  style: TextStyle(color: Colors.white),
+                                  style:
+                                      TextStyle(color: Colors.white),
                                 ),
                               ),
                             ),
@@ -277,9 +283,11 @@ class _LoginPageState extends State<LoginPage> {
                               child: ElevatedButton(
                                 onPressed: isLoading ? null : login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue.shade700,
+                                  backgroundColor:
+                                      Colors.blue.shade700,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius:
+                                        BorderRadius.circular(12),
                                   ),
                                 ),
                                 child: isLoading
@@ -290,18 +298,23 @@ class _LoginPageState extends State<LoginPage> {
                                     : const Text(
                                         'Sign In',
                                         style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white),
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
                               ),
                             ),
                             const SizedBox(height: 16),
                             TextButton(
                               onPressed: () async {
-                                final email = await Navigator.push<String>(
+                                final email =
+                                    await Navigator.push<String>(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (_) => const SignupPage()),
+                                    builder: (_) =>
+                                        const SignupPage(),
+                                  ),
                                 );
                                 if (email != null) {
                                   emailController.text = email;
@@ -309,7 +322,8 @@ class _LoginPageState extends State<LoginPage> {
                               },
                               child: const Text(
                                 "Don't have an account? Sign up",
-                                style: TextStyle(color: Colors.white),
+                                style:
+                                    TextStyle(color: Colors.white),
                               ),
                             ),
                           ],

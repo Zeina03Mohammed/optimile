@@ -35,9 +35,8 @@ class AuthViewModel extends ChangeNotifier {
     required String name,
     required String email,
     required String password,
-    required String role, // ✅ REQUIRED (fixes your error)
+    required String role, // ✅ required
     String? phone,
-    required String role, // 🔹 ADDED: Required role parameter
   }) async {
     setLoading(true);
 
@@ -45,36 +44,14 @@ class AuthViewModel extends ChangeNotifier {
       name: name,
       email: email,
       password: password,
-      role: role, // ✅ forward role to service
+      role: role, // ✅ forward role to service (only once)
       phone: phone,
-      role: role, // 🔹 Pass role to service
     );
 
     setLoading(false);
     return result;
   }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-  // ================= PASSWORD RESET =================
-  // 🔹 ADDED: Password reset method
-  Future<String?> resetPassword(String email) async {
-    setLoading(true);
-    final result = await _authService.resetPassword(email);
-    setLoading(false);
-    return result;
-  }
-
-  // ================= RESEND VERIFICATION EMAIL =================
-  // 🔹 ADDED: Resend verification email method
-  Future<String?> resendVerificationEmail() async {
-    setLoading(true);
-    final result = await _authService.resendVerificationEmail();
-    setLoading(false);
-    return result;
-=======
-=======
->>>>>>> Stashed changes
   // ================= RESET PASSWORD =================
   // Used in: lib/view/login.dart
   Future<String?> resetPassword(String email) async {
@@ -97,10 +74,6 @@ class AuthViewModel extends ChangeNotifier {
     } finally {
       setLoading(false);
     }
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   }
 
   // ================= LOGOUT =================
