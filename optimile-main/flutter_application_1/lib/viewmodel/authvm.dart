@@ -18,6 +18,7 @@ class AuthViewModel extends ChangeNotifier {
   // ================= LOGIN =================
   Future<Map<String, dynamic>> login(String email, String password) async {
     setLoading(true);
+
     final result = await _authService.login(email, password);
 
     if (result['driver'] != null) {
@@ -34,21 +35,26 @@ class AuthViewModel extends ChangeNotifier {
     required String name,
     required String email,
     required String password,
+    required String role, // ✅ REQUIRED (fixes your error)
     String? phone,
     required String role, // 🔹 ADDED: Required role parameter
   }) async {
     setLoading(true);
+
     final result = await _authService.signup(
       name: name,
       email: email,
       password: password,
+      role: role, // ✅ forward role to service
       phone: phone,
       role: role, // 🔹 Pass role to service
     );
+
     setLoading(false);
     return result;
   }
 
+<<<<<<< Updated upstream
   // ================= PASSWORD RESET =================
   // 🔹 ADDED: Password reset method
   Future<String?> resetPassword(String email) async {
@@ -65,6 +71,30 @@ class AuthViewModel extends ChangeNotifier {
     final result = await _authService.resendVerificationEmail();
     setLoading(false);
     return result;
+=======
+  // ================= RESET PASSWORD =================
+  // Used in: lib/view/login.dart
+  Future<String?> resetPassword(String email) async {
+    setLoading(true);
+    try {
+      final result = await _authService.resetPassword(email);
+      return result; // usually null if success, or error message
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ================= RESEND VERIFICATION EMAIL =================
+  // Used in: lib/view/login.dart
+  Future<String?> resendVerificationEmail() async {
+    setLoading(true);
+    try {
+      final result = await _authService.resendVerificationEmail();
+      return result; // usually null if success, or error message
+    } finally {
+      setLoading(false);
+    }
+>>>>>>> Stashed changes
   }
 
   // ================= LOGOUT =================

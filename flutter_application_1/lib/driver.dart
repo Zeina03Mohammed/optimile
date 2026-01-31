@@ -54,7 +54,7 @@ final Map<LatLng, String> _stopTitles = {};
 
   StreamSubscription<Position>? _positionStream;
 
-  static final CameraPosition _initialCameraPosition = CameraPosition(
+  static const CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(Env.defaultLat, Env.defaultLng),
     zoom: 13,
   );

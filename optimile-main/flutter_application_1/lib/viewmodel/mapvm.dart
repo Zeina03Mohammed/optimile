@@ -113,7 +113,9 @@ void setFragile(bool value) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.deniedForever ||
-        permission == LocationPermission.denied) return;
+        permission == LocationPermission.denied) {
+      return;
+    }
 
     final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
@@ -518,7 +520,9 @@ void startDeviationMonitor(BuildContext context) {
       if (!navigationStarted ||
           _plannedRoutePoints.isEmpty ||
           currentLocation == null ||
-          _isReoptimizing) return;
+          _isReoptimizing) {
+        return;
+      }
 
       double minDist = double.infinity;
 
@@ -565,7 +569,9 @@ void startTrafficMonitor(BuildContext context) {
       if (!navigationStarted ||
           currentLocation == null ||
           stops.isEmpty ||
-          _isReoptimizing) return;
+          _isReoptimizing) {
+        return;
+      }
 
       // Prevent rapid re-optimizations
       if (_lastReoptTime != null) {

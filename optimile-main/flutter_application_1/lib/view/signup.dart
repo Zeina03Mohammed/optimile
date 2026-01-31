@@ -129,10 +129,10 @@ class _SignupPageState extends State<SignupPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.person_add,
+                            const Icon(Icons.person_add,
                                 size: 64, color: Colors.white),
                             const SizedBox(height: 16),
-                            Text(
+                            const Text(
                               'Create Account',
                               style: TextStyle(
                                 fontSize: 28,
@@ -253,6 +253,12 @@ class _SignupPageState extends State<SignupPage> {
                               height: 50,
                               child: ElevatedButton(
                                 onPressed: isLoading ? null : signup,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue.shade700,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
                                 child: isLoading
                                     ? const CircularProgressIndicator(
                                         color: Colors.white,
@@ -263,12 +269,6 @@ class _SignupPageState extends State<SignupPage> {
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold),
                                       ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue.shade700,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
                               ),
                             ),
 

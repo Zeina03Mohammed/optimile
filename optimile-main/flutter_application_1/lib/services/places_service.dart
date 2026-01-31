@@ -69,7 +69,7 @@ class PlacesService {
     // Location
     final loc = place['geometry'] != null
         ? LatLng(place['geometry']['location']['lat'], place['geometry']['location']['lng'])
-        : LatLng(0, 0);
+        : const LatLng(0, 0);
 
     // Photos
     final photos = <String>[];

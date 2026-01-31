@@ -60,7 +60,7 @@ class AdminDashboard extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: statistics.entries.map((entry) {
-                return Container(
+                return SizedBox(
                   width: MediaQuery.of(context).size.width / 2.2,
                   child: Card(
                     elevation: 3,
@@ -127,7 +127,7 @@ class AdminDashboard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: ListTile(
-                    leading: Icon(Icons.person, color: primaryBlue),
+                    leading: const Icon(Icons.person, color: primaryBlue),
                     title: Text(
                       d['name']!,
                       style: const TextStyle(
@@ -166,11 +166,11 @@ class AdminDashboard extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text('• Peak delivery hours: 2 PM – 6 PM'),
                     Text('• Fastest zone: Nasr City'),
                     Text('• Delays mainly in: Downtown'),

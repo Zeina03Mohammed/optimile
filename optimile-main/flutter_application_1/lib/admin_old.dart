@@ -78,7 +78,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       spacing: 12,
                       runSpacing: 12,
                       children: statistics.entries.map((entry) {
-                        return Container(
+                        return SizedBox(
                           width: MediaQuery.of(context).size.width / 2.2,
                           child: Card(
                             elevation: 3,

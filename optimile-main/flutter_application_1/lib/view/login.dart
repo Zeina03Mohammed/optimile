@@ -208,10 +208,10 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.local_shipping,
+                            const Icon(Icons.local_shipping,
                                 size: 64, color: Colors.white),
                             const SizedBox(height: 16),
-                            Text(
+                            const Text(
                               'Optimile',
                               style: TextStyle(
                                 fontSize: 32,

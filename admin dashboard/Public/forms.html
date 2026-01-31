@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+	<title>Admin Dashboard - Forms </title>
+	<meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no' name='viewport' />
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i">
+	<link rel="stylesheet" href="assets/css/ready.css">
+	<link rel="stylesheet" href="assets/css/demo.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+	<div class="wrapper">
+
+		<!-- Sidebar -->
+		<div class="sidebar">
+			<div class="scrollbar-inner sidebar-wrapper">
+				<div class="user">
+					<div class="photo"><img src="assets/img/profile.jpg" alt="Profile"></div>
+					<div class="info">
+						<a data-toggle="collapse" href="#collapseExample" aria-expanded="true">
+							<span>Hizrian <span class="user-level">Administrator</span><span class="caret"></span></span>
+						</a>
+						<div class="clearfix"></div>
+						<div class="collapse in" id="collapseExample" aria-expanded="true">
+							<ul class="nav">
+								<li><a href="#profile"><span class="link-collapse">My Profile</span></a></li>
+								<li><a href="#edit"><span class="link-collapse">Edit Profile</span></a></li>
+								<li><a href="#settings"><span class="link-collapse">Settings</span></a></li>
+							</ul>
+						</div>
+					</div>
+				</div>
+				<ul class="nav">
+					<li class="nav-item"><a href="/"><i class="la la-dashboard"></i><p>Dashboard</p></a></li>
+					<li class="nav-item"><a href="drivers.html"><i class="fa fa-car"></i><p>Drivers</p></a></li>
+					<li class="nav-item active"><a href="forms.html"><i class="la la-keyboard-o"></i><p>Forms</p></a></li>
+					
+				</ul>
+			</div>
+		</div>
+
+		<!-- Main Panel -->
+		<div class="main-panel">
+			<div class="content">
+				<div class="container-fluid">
+					<h4 class="page-title">Management</h4>
+
+					<div class="row">
+						<!-- Driver Management (NO ADD) -->
+						<div class="col-md-6">
+							<div class="card">
+								<div class="card-header"><div class="card-title">Driver Management</div></div>
+								<div class="card-body">
+									<form onsubmit="return false;">
+										<div class="form-group">
+											<label>Driver</label>
+											<select class="form-control" id="driverSelect">
+												<option disabled selected>Loading drivers...</option>
+											</select>
+											<small class="text-muted d-block mt-2" id="driverMeta"></small>
+										</div>
+
+										<div class="card-action">
+											<button class="btn btn-primary" type="button" id="openEditDriverBtn">Edit</button>
+											<button class="btn btn-danger" type="button" id="deleteDriverBtn">Delete</button>
+										</div>
+									</form>
+									<div class="alert alert-danger mt-3" id="driverLoadError" style="display:none;"></div>
+								</div>
+							</div>
+						</div>
+
+						<!-- User Management -->
+						<div class="col-md-6">
+							<div class="card">
+								<div class="card-header"><div class="card-title">User Management</div></div>
+								<div class="card-body">
+									<form onsubmit="return false;">
+										<div class="form-group">
+											<label>User</label>
+											<select class="form-control" id="userSelect">
+												<option disabled selected>Loading users...</option>
+											</select>
+											<small class="text-muted d-block mt-2" id="userMeta"></small>
+										</div>
+
+										<div class="card-action">
+											<button class="btn btn-success" type="button" id="openAddUserBtn" data-toggle="modal" data-target="#userModal">Add</button>
+											<button class="btn btn-primary" type="button" id="openEditUserBtn">Edit</button>
+											<button class="btn btn-danger" type="button" id="deleteUserBtn">Delete</button>
+										</div>
+									</form>
+									<div class="alert alert-danger mt-3" id="userLoadError" style="display:none;"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="row">
+						<!-- Admin Management (LIKE DRIVER) -->
+						<div class="col-md-6">
+							<div class="card">
+								<div class="card-header"><div class="card-title">Admin Management</div></div>
+								<div class="card-body">
+									<form onsubmit="return false;">
+										<div class="form-group">
+											<label>Admin</label>
+											<select class="form-control" id="adminSelect">
+												<option disabled selected>Loading admins...</option>
+											</select>
+											<small class="text-muted d-block mt-2" id="adminMeta"></small>
+										</div>
+
+										<div class="card-action">
+											<button class="btn btn-primary" type="button" id="openEditAdminBtn">Edit</button>
+											<button class="btn btn-danger" type="button" id="deleteAdminBtn">Delete</button>
+										</div>
+									</form>
+									<div class="alert alert-danger mt-3" id="adminLoadError" style="display:none;"></div>
+								</div>
+							</div>
+						</div>
+
+						<!-- ✅ Package Management (Package ID => Firestore Status Label) -->
+						<div class="col-md-6">
+							<div class="card">
+								<div class="card-header"><div class="card-title">Package Management</div></div>
+								<div class="card-body">
+									<form onsubmit="return false;">
+										<div class="form-group">
+											<label>Package ID</label>
+											<input type="text" class="form-control" id="packageIdInput" placeholder="Enter Package ID">
+											<small id="packageStatusLabel" class="text-muted d-block mt-2">Type a package ID to check status.</small>
+										</div>
+
+										<!-- ✅ Removed ONLY the package buttons (as requested) -->
+									</form>
+								</div>
+							</div>
+						</div>
+
+					</div>
+
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Driver Modal (Edit only) -->
+	<div class="modal fade" id="driverModal" tabindex="-1">
+	  <div class="modal-dialog">
+		<div class="modal-content">
+		  <div class="modal-header">
+			<h5 class="modal-title">Edit Driver</h5>
+			<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+		  </div>
+		  <div class="modal-body">
+			<form onsubmit="return false;">
+			  <input type="hidden" id="driverDocId">
+			  <div class="form-group"><label>Name</label><input type="text" class="form-control" id="driverNameInput"></div>
+			  <div class="form-group"><label>Email</label><input type="email" class="form-control" id="driverEmailInput"></div>
+			  <div class="form-group"><label>Phone</label><input type="text" class="form-control" id="driverPhoneInput"></div>
+			  <div class="alert alert-danger" id="driverModalError" style="display:none;"></div>
+			</form>
+		  </div>
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-success" id="driverModalSaveBtn">Save</button>
+			<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+		  </div>
+		</div>
+	  </div>
+	</div>
+
+	<!-- Admin Modal (Edit only) -->
+	<div class="modal fade" id="adminModal" tabindex="-1">
+	  <div class="modal-dialog">
+		<div class="modal-content">
+		  <div class="modal-header">
+			<h5 class="modal-title">Edit Admin</h5>
+			<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+		  </div>
+		  <div class="modal-body">
+			<form onsubmit="return false;">
+			  <input type="hidden" id="adminDocId">
+			  <div class="form-group"><label>Name</label><input type="text" class="form-control" id="adminNameInput"></div>
+			  <div class="form-group"><label>Email</label><input type="email" class="form-control" id="adminEmailInput"></div>
+			  <div class="form-group"><label>Phone</label><input type="text" class="form-control" id="adminPhoneInput"></div>
+			  <div class="alert alert-danger" id="adminModalError" style="display:none;"></div>
+			</form>
+		  </div>
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-success" id="adminModalSaveBtn">Save</button>
+			<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+		  </div>
+		</div>
+	  </div>
+	</div>
+
+	<!-- User Modal (Add/Edit) -->
+	<div class="modal fade" id="userModal" tabindex="-1">
+	  <div class="modal-dialog">
+		<div class="modal-content">
+		  <div class="modal-header">
+			<h5 class="modal-title" id="userModalTitle">Add New User</h5>
+			<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+		  </div>
+		  <div class="modal-body">
+			<form onsubmit="return false;">
+			  <input type="hidden" id="userDocId">
+			  <div class="form-group"><label>Name</label><input type="text" class="form-control" id="userNameInput"></div>
+			  <div class="form-group"><label>Email</label><input type="email" class="form-control" id="userEmailInput"></div>
+			  <div class="form-group"><label>Phone</label><input type="text" class="form-control" id="userPhoneInput"></div>
+
+			  <!-- ✅ ADDED: Password field -->
+			  <div class="form-group">
+				<label>Password</label>
+				<input type="password" class="form-control" id="userPasswordInput" placeholder="Enter password">
+				<small class="text-muted d-block mt-2">Leave empty when editing if you don’t want to change it.</small>
+			  </div>
+
+			  <div class="form-group">
+				  <label>Role</label>
+				  <select class="form-control" id="userRoleInput">
+					  <option value="driver">Driver</option>
+					  <option value="admin">Admin</option>
+				  </select>
+			  </div>
+			  <div class="alert alert-danger" id="userModalError" style="display:none;"></div>
+			</form>
+		  </div>
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-success" id="userModalSaveBtn">Save</button>
+			<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+		  </div>
+		</div>
+	  </div>
+	</div>
+
+	<script src="assets/js/core/jquery.3.2.1.min.js"></script>
+	<script src="assets/js/core/popper.min.js"></script>
+	<script src="assets/js/core/bootstrap.min.js"></script>
+	<script src="assets/js/ready.min.js"></script>
+
+	<script>
+	/* ===============================
+	   Users fetch helper
+	   =============================== */
+	async function fetchUsers() {
+		const res = await fetch('/api/users', { cache: 'no-store' });
+		if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+		const users = await res.json();
+		if (!Array.isArray(users)) throw new Error('Unexpected response from /api/users');
+		return users;
+	}
+
+	async function loadDriverDropdown(selectedId=null) {
+		const select = document.getElementById('driverSelect');
+		const meta = document.getElementById('driverMeta');
+		const errBox = document.getElementById('driverLoadError');
+		errBox.style.display='none'; errBox.textContent='';
+		select.innerHTML = `<option disabled selected>Loading drivers...</option>`;
+		meta.textContent = '';
+
+		try {
+			const users = await fetchUsers();
+			const drivers = users.filter(u => (u.role||'').toLowerCase() === 'driver');
+
+			select.innerHTML = `<option disabled selected>Select a driver</option>`;
+			if (drivers.length === 0) {
+				select.innerHTML = `<option disabled selected>No drivers found</option>`;
+				meta.textContent = 'No users with role = "driver"';
+				return;
+			}
+
+			drivers.forEach(d => {
+				const opt = document.createElement('option');
+				opt.value = d.id;
+				opt.dataset.name = d.name || '';
+				opt.dataset.email = d.email || '';
+				opt.dataset.phone = d.phone || '';
+				opt.textContent = `${d.name || d.email || d.id} (${d.email || 'no email'})`;
+				select.appendChild(opt);
+			});
+
+			if (selectedId) select.value = selectedId;
+			meta.textContent = `Loaded ${drivers.length} driver(s).`;
+		} catch (e) {
+			console.error(e);
+			select.innerHTML = `<option disabled selected>Failed to load</option>`;
+			errBox.textContent = 'Could not load drivers.';
+			errBox.style.display='block';
+		}
+	}
+
+	async function loadAdminDropdown(selectedId=null) {
+		const select = document.getElementById('adminSelect');
+		const meta = document.getElementById('adminMeta');
+		const errBox = document.getElementById('adminLoadError');
+		errBox.style.display='none'; errBox.textContent='';
+		select.innerHTML = `<option disabled selected>Loading admins...</option>`;
+		meta.textContent = '';
+
+		try {
+			const users = await fetchUsers();
+			const admins = users.filter(u => (u.role||'').toLowerCase() === 'admin');
+
+			select.innerHTML = `<option disabled selected>Select an admin</option>`;
+			if (admins.length === 0) {
+				select.innerHTML = `<option disabled selected>No admins found</option>`;
+				meta.textContent = 'No users with role = "admin"';
+				return;
+			}
+
+			admins.forEach(a => {
+				const opt = document.createElement('option');
+				opt.value = a.id;
+				opt.dataset.name = a.name || '';
+				opt.dataset.email = a.email || '';
+				opt.dataset.phone = a.phone || '';
+				opt.textContent = `${a.name || a.email || a.id} (${a.email || 'no email'})`;
+				select.appendChild(opt);
+			});
+
+			if (selectedId) select.value = selectedId;
+			meta.textContent = `Loaded ${admins.length} admin(s).`;
+		} catch (e) {
+			console.error(e);
+			select.innerHTML = `<option disabled selected>Failed to load</option>`;
+			errBox.textContent = 'Could not load admins.';
+			errBox.style.display='block';
+		}
+	}
+
+	async function loadUserDropdown(selectedId=null) {
+		const select = document.getElementById('userSelect');
+		const meta = document.getElementById('userMeta');
+		const errBox = document.getElementById('userLoadError');
+		errBox.style.display='none'; errBox.textContent='';
+		select.innerHTML = `<option disabled selected>Loading users...</option>`;
+		meta.textContent = '';
+
+		try {
+			const users = await fetchUsers();
+			select.innerHTML = `<option disabled selected>Select a user</option>`;
+
+			if (users.length === 0) {
+				select.innerHTML = `<option disabled selected>No users found</option>`;
+				meta.textContent = 'No users in database.';
+				return;
+			}
+
+			users.forEach(u => {
+				const opt = document.createElement('option');
+				opt.value = u.id;
+				opt.dataset.name = u.name || '';
+				opt.dataset.email = u.email || '';
+				opt.dataset.phone = u.phone || '';
+				opt.dataset.role = (u.role||'').toLowerCase();
+				opt.textContent = `${u.name || u.email || u.id} (${opt.dataset.role || 'unknown'})`;
+				select.appendChild(opt);
+			});
+
+			if (selectedId) select.value = selectedId;
+			meta.textContent = `Loaded ${users.length} user(s).`;
+		} catch (e) {
+			console.error(e);
+			select.innerHTML = `<option disabled selected>Failed to load</option>`;
+			errBox.textContent = 'Could not load users.';
+			errBox.style.display='block';
+		}
+	}
+
+	/* ===============================
+	   Driver edit/delete
+	   =============================== */
+	function openDriverEditModal() {
+		const select = document.getElementById('driverSelect');
+		const id = select.value;
+		if (!id) return alert('Select a driver first.');
+		const opt = select.options[select.selectedIndex];
+
+		document.getElementById('driverDocId').value = id;
+		document.getElementById('driverNameInput').value = opt.dataset.name || '';
+		document.getElementById('driverEmailInput').value = opt.dataset.email || '';
+		document.getElementById('driverPhoneInput').value = opt.dataset.phone || '';
+		document.getElementById('driverModalError').style.display = 'none';
+		$('#driverModal').modal('show');
+	}
+
+	async function saveDriverEditOnly() {
+		const err = document.getElementById('driverModalError');
+		err.style.display='none'; err.textContent='';
+
+		const id = document.getElementById('driverDocId').value.trim();
+		const name = document.getElementById('driverNameInput').value.trim();
+		const email = document.getElementById('driverEmailInput').value.trim();
+		const phone = document.getElementById('driverPhoneInput').value.trim();
+
+		if (!id) { err.textContent='No driver selected.'; err.style.display='block'; return; }
+		if (!name || !email) { err.textContent='Name and email are required.'; err.style.display='block'; return; }
+
+		const res = await fetch(`/api/drivers/${encodeURIComponent(id)}`, {
+			method:'PUT',
+			headers:{'Content-Type':'application/json'},
+			body: JSON.stringify({ name, email, phone })
+		});
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) { err.textContent=data.error || 'Update failed.'; err.style.display='block'; return; }
+
+		$('#driverModal').modal('hide');
+		await loadDriverDropdown(id);
+		await loadUserDropdown();
+	}
+
+	async function deleteSelectedDriver() {
+		const select = document.getElementById('driverSelect');
+		const id = select.value;
+		if (!id) return alert('Select a driver first.');
+
+		const label = select.options[select.selectedIndex]?.textContent || id;
+		if (!confirm(`Delete this driver?\n\n${label}`)) return;
+
+		const res = await fetch(`/api/drivers/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) return alert(data.error || 'Delete failed.');
+
+		await loadDriverDropdown();
+		await loadUserDropdown();
+	}
+
+	/* ===============================
+	   Admin edit/delete
+	   =============================== */
+	function openAdminEditModal() {
+		const select = document.getElementById('adminSelect');
+		const id = select.value;
+		if (!id) return alert('Select an admin first.');
+		const opt = select.options[select.selectedIndex];
+
+		document.getElementById('adminDocId').value = id;
+		document.getElementById('adminNameInput').value = opt.dataset.name || '';
+		document.getElementById('adminEmailInput').value = opt.dataset.email || '';
+		document.getElementById('adminPhoneInput').value = opt.dataset.phone || '';
+		document.getElementById('adminModalError').style.display = 'none';
+		$('#adminModal').modal('show');
+	}
+
+	async function saveAdminEditOnly() {
+		const err = document.getElementById('adminModalError');
+		err.style.display='none'; err.textContent='';
+
+		const id = document.getElementById('adminDocId').value.trim();
+		const name = document.getElementById('adminNameInput').value.trim();
+		const email = document.getElementById('adminEmailInput').value.trim();
+		const phone = document.getElementById('adminPhoneInput').value.trim();
+
+		if (!id) { err.textContent='No admin selected.'; err.style.display='block'; return; }
+		if (!name || !email) { err.textContent='Name and email are required.'; err.style.display='block'; return; }
+
+		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+			method:'PUT',
+			headers:{'Content-Type':'application/json'},
+			body: JSON.stringify({ name, email, phone, role:'admin' })
+		});
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) { err.textContent=data.error || 'Update failed.'; err.style.display='block'; return; }
+
+		$('#adminModal').modal('hide');
+		await loadAdminDropdown(id);
+		await loadUserDropdown();
+	}
+
+	async function deleteSelectedAdmin() {
+		const select = document.getElementById('adminSelect');
+		const id = select.value;
+		if (!id) return alert('Select an admin first.');
+
+		const label = select.options[select.selectedIndex]?.textContent || id;
+		if (!confirm(`Delete this admin?\n\n${label}`)) return;
+
+		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) return alert(data.error || 'Delete failed.');
+
+		await loadAdminDropdown();
+		await loadUserDropdown();
+	}
+
+	/* ===============================
+	   User add/edit/delete
+	   =============================== */
+	function openUserModal(mode) {
+		const title = document.getElementById('userModalTitle');
+		const err = document.getElementById('userModalError');
+		err.style.display='none'; err.textContent='';
+
+		const idInput = document.getElementById('userDocId');
+		const nameInput = document.getElementById('userNameInput');
+		const emailInput = document.getElementById('userEmailInput');
+		const phoneInput = document.getElementById('userPhoneInput');
+		const passwordInput = document.getElementById('userPasswordInput');
+		const roleInput = document.getElementById('userRoleInput');
+
+		if (mode === 'add') {
+			title.textContent = 'Add New User';
+			idInput.value=''; nameInput.value=''; emailInput.value=''; phoneInput.value=''; passwordInput.value=''; roleInput.value='driver';
+			$('#userModal').modal('show');
+			return;
+		}
+
+		const select = document.getElementById('userSelect');
+		const id = select.value;
+		if (!id) return alert('Select a user first.');
+		const opt = select.options[select.selectedIndex];
+
+		title.textContent = 'Edit User';
+		idInput.value = id;
+		nameInput.value = opt.dataset.name || '';
+		emailInput.value = opt.dataset.email || '';
+		phoneInput.value = opt.dataset.phone || '';
+		passwordInput.value = '';
+		roleInput.value = opt.dataset.role || 'driver';
+
+		$('#userModal').modal('show');
+	}
+
+	async function saveUser() {
+		const err = document.getElementById('userModalError');
+		err.style.display='none'; err.textContent='';
+
+		const id = document.getElementById('userDocId').value.trim();
+		const name = document.getElementById('userNameInput').value.trim();
+		const email = document.getElementById('userEmailInput').value.trim();
+		const phone = document.getElementById('userPhoneInput').value.trim();
+		const password = document.getElementById('userPasswordInput').value;
+		const role = document.getElementById('userRoleInput').value;
+
+		if (!name || !email || !role) { err.textContent='Name, email, role required.'; err.style.display='block'; return; }
+
+		if (!id && !password.trim()) {
+			err.textContent = 'Password is required for new users.';
+			err.style.display = 'block';
+			return;
+		}
+
+		let res;
+		if (!id) {
+			res = await fetch('/api/users', {
+				method:'POST',
+				headers:{'Content-Type':'application/json'},
+				body: JSON.stringify({ name, email, phone, role, password })
+			});
+		} else {
+			res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+				method:'PUT',
+				headers:{'Content-Type':'application/json'},
+				body: JSON.stringify({ name, email, phone, role, password })
+			});
+		}
+
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) { err.textContent=data.error || 'Save failed.'; err.style.display='block'; return; }
+
+		$('#userModal').modal('hide');
+		await loadUserDropdown(id || null);
+		await loadDriverDropdown();
+		await loadAdminDropdown();
+	}
+
+	async function deleteSelectedUser() {
+		const select = document.getElementById('userSelect');
+		const id = select.value;
+		if (!id) return alert('Select a user first.');
+
+		const label = select.options[select.selectedIndex]?.textContent || id;
+		if (!confirm(`Delete this user?\n\n${label}`)) return;
+
+		const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method:'DELETE' });
+		const data = await res.json().catch(()=>({}));
+		if (!res.ok) return alert(data.error || 'Delete failed.');
+
+		await loadUserDropdown();
+		await loadDriverDropdown();
+		await loadAdminDropdown();
+	}
+
+	/* ===============================
+	   ✅ Package Status lookup (Firestore)
+	   =============================== */
+	let packageTimer = null;
+
+	function setPackageLabel(text, type = 'muted') {
+		const label = document.getElementById('packageStatusLabel');
+		label.className = 'd-block mt-2';
+		if (type === 'success') label.classList.add('text-success');
+		else if (type === 'danger') label.classList.add('text-danger');
+		else if (type === 'warning') label.classList.add('text-warning');
+		else label.classList.add('text-muted');
+		label.textContent = text;
+	}
+
+	function normalizeStatus(s) {
+		return String(s || '').toLowerCase().trim();
+	}
+
+	function statusToNiceText(status) {
+		const s = normalizeStatus(status);
+
+		// ✅ Your rule: done = delivered
+		if (['done', 'delivered', 'completed'].includes(s)) return { text: 'Delivered ✅', type: 'success' };
+		if (['pending'].includes(s)) return { text: 'Pending ⏳', type: 'warning' };
+		if (['in transit', 'in_transit', 'in-transit', 'intransit'].includes(s)) return { text: 'In Transit 🚚', type: 'muted' };
+		if (['cancelled', 'canceled'].includes(s)) return { text: 'Cancelled ❌', type: 'danger' };
+		return { text: `Status: ${status}`, type: 'muted' };
+	}
+
+	async function checkPackageStatus(packageId) {
+		if (!packageId) {
+			setPackageLabel('Type a package ID to check status.', 'muted');
+			return;
+		}
+
+		setPackageLabel('Checking status...', 'muted');
+
+		try {
+			const res = await fetch(`/api/package-status/${encodeURIComponent(packageId)}`, { cache: 'no-store' });
+			const data = await res.json().catch(() => ({}));
+
+			if (!res.ok) {
+				setPackageLabel(data.error || 'Error checking package.', 'danger');
+				return;
+			}
+
+			if (!data.found) {
+				setPackageLabel('Package not found in deliveries.', 'danger');
+				return;
+			}
+
+			const nice = statusToNiceText(data.status);
+			setPackageLabel(nice.text, nice.type);
+
+		} catch (e) {
+			console.error(e);
+			setPackageLabel('Server error. Make sure backend is running.', 'danger');
+		}
+	}
+
+	document.getElementById('packageIdInput').addEventListener('input', function () {
+		const value = this.value.trim();
+		clearTimeout(packageTimer);
+		packageTimer = setTimeout(() => checkPackageStatus(value), 400);
+	});
+
+	// Buttons
+	document.getElementById('openEditDriverBtn').addEventListener('click', openDriverEditModal);
+	document.getElementById('driverModalSaveBtn').addEventListener('click', saveDriverEditOnly);
+	document.getElementById('deleteDriverBtn').addEventListener('click', deleteSelectedDriver);
+
+	document.getElementById('openEditAdminBtn').addEventListener('click', openAdminEditModal);
+	document.getElementById('adminModalSaveBtn').addEventListener('click', saveAdminEditOnly);
+	document.getElementById('deleteAdminBtn').addEventListener('click', deleteSelectedAdmin);
+
+	document.getElementById('openAddUserBtn').addEventListener('click', () => openUserModal('add'));
+	document.getElementById('openEditUserBtn').addEventListener('click', () => openUserModal('edit'));
+	document.getElementById('userModalSaveBtn').addEventListener('click', saveUser);
+	document.getElementById('deleteUserBtn').addEventListener('click', deleteSelectedUser);
+
+	// Initial load
+	loadDriverDropdown();
+	loadAdminDropdown();
+	loadUserDropdown();
+	</script>
+
+</body>
+</html>

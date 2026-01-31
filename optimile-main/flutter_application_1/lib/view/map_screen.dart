@@ -32,7 +32,7 @@ class _MapView extends StatelessWidget {
       body: Stack(
         children: [
           GoogleMap(
-            initialCameraPosition: CameraPosition(
+            initialCameraPosition: const CameraPosition(
               target: LatLng(Env.defaultLat, Env.defaultLng),
               zoom: 13,
             ),

@@ -79,8 +79,8 @@ class SignupPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Signup')),
-      body: Center(
-        child: const Text('Signup Page - Add your signup form here'),
+      body: const Center(
+        child: Text('Signup Page - Add your signup form here'),
       ),
     );
   }

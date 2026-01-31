@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+	<title>Admin Dashboard</title>
+	<meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no' name='viewport' />
+	<link rel="stylesheet" href="assets/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i">
+	<link rel="stylesheet" href="assets/css/ready.css">
+	<link rel="stylesheet" href="assets/css/demo.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+
+<body>
+	<div class="wrapper">
+		<div class="main-header">
+			<div class="logo-header">
+				<a href="index.html" class="logo">
+					Admin Dashboard
+				</a>
+				<button class="navbar-toggler sidenav-toggler ml-auto" type="button" data-toggle="collapse" data-target="collapse" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+					<span class="navbar-toggler-icon"></span>
+				</button>
+				<button class="topbar-toggler more"><i class="la la-ellipsis-v"></i></button>
+			</div>
+
+			<nav class="navbar navbar-header navbar-expand-lg"></nav>
+
+			<div class="sidebar">
+				<div class="scrollbar-inner sidebar-wrapper">
+					<div class="user">
+						<div class="photo">
+							<img src="assets/img/profile.jpg">
+						</div>
+						<div class="info">
+							<a class="" data-toggle="collapse" href="#collapseExample" aria-expanded="true">
+								<span>
+									Hizrian
+									<span class="user-level">Administrator</span>
+									<span class="caret"></span>
+								</span>
+							</a>
+							<div class="clearfix"></div>
+
+							<div class="collapse in" id="collapseExample" aria-expanded="true">
+								<ul class="nav">
+									<li>
+										<a href="#profile">
+											<span class="link-collapse">My Profile</span>
+										</a>
+									</li>
+									<li>
+										<a href="#edit">
+											<span class="link-collapse">Edit Profile</span>
+										</a>
+									</li>
+									<li>
+										<a href="#settings">
+											<span class="link-collapse">Settings</span>
+										</a>
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+
+					<ul class="nav">
+						<li class="nav-item active">
+							<a href="index.html">
+								<i class="la la-dashboard"></i>
+								<p>Dashboard</p>
+								<span class="badge badge-count"></span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="drivers.html">
+								<i class="fa fa-car"></i>
+								<p>Drivers</p>
+								<span class="badge badge-count"></span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="forms.html">
+								<i class="la la-keyboard-o"></i>
+								<p>Forms</p>
+								<span class="badge badge-count"></span>
+							</a>
+						</li>
+					</ul>
+
+				</div>
+			</div>
+
+			<div class="main-panel">
+				<div class="content">
+					<div class="container-fluid">
+						<h4 class="page-title">Dashboard</h4>
+
+						<div class="row">
+							<div class="col-md-3">
+								<div class="card card-stats card-warning">
+									<div class="card-body ">
+										<div class="row">
+											<div class="col-5">
+												<div class="icon-big text-center">
+													<i class="la la-users"></i>
+												</div>
+											</div>
+											<div class="col-7 d-flex align-items-center">
+												<div class="numbers">
+													<p class="card-category">Drivers</p>
+													<h4 class="card-title" id="driversCount">--</h4>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="col-md-3">
+								<div class="card card-stats card-success">
+									<div class="card-body ">
+										<div class="row">
+											<div class="col-5">
+												<div class="icon-big text-center">
+													<i class="la la-bar-chart"></i>
+												</div>
+											</div>
+											<div class="col-7 d-flex align-items-center">
+												<div class="numbers">
+													<p class="card-category">Packages</p>
+													<h4 class="card-title" id="packagesCount">--</h4>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="col-md-3">
+								<div class="card card-stats card-danger">
+									<div class="card-body">
+										<div class="row">
+											<div class="col-5">
+												<div class="icon-big text-center">
+													<i class="la la-newspaper-o"></i>
+												</div>
+											</div>
+											<div class="col-7 d-flex align-items-center">
+												<div class="numbers">
+													<p class="card-category">Delivered</p>
+													<h4 class="card-title" id="deliveredCount">--</h4>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="col-md-3">
+								<div class="card card-stats card-primary">
+									<div class="card-body ">
+										<div class="row">
+											<div class="col-5">
+												<div class="icon-big text-center">
+													<i class="la la-check-circle"></i>
+												</div>
+											</div>
+											<div class="col-7 d-flex align-items-center">
+												<div class="numbers">
+													<p class="card-category">Pending</p>
+													<h4 class="card-title" id="pendingCount">--</h4>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Delivered Percentage Card -->
+						<div class="row">
+							<div class="col-md-3">
+								<div class="card">
+									<div class="card-header">
+										<h4 class="card-title">Orders</h4>
+										<p class="card-category">Complete</p>
+									</div>
+									<div class="card-body">
+										<div id="task-complete" class="chart-circle mt-4 mb-3"></div>
+
+										<div class="text-center mt-2">
+											<strong id="deliveredPercentText">--%</strong>
+										</div>
+									</div>
+									<div class="card-footer">
+										<div class="legend"><i class="la la-circle text-primary"></i> Completed</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						
+					</div>
+				</div>
+				
+			</div>
+		</div>
+	</div>
+
+	<!-- Modal -->
+	
+</body>
+
+<script src="assets/js/core/jquery.3.2.1.min.js"></script>
+<script src="assets/js/plugin/jquery-ui-1.12.1.custom/jquery-ui.min.js"></script>
+<script src="assets/js/core/popper.min.js"></script>
+<script src="assets/js/core/bootstrap.min.js"></script>
+<script src="assets/js/plugin/chartist/chartist.min.js"></script>
+<script src="assets/js/plugin/chartist/plugin/chartist-plugin-tooltip.min.js"></script>
+<script src="assets/js/plugin/bootstrap-notify/bootstrap-notify.min.js"></script>
+<script src="assets/js/plugin/bootstrap-toggle/bootstrap-toggle.min.js"></script>
+<script src="assets/js/plugin/jquery-mapael/jquery.mapael.min.js"></script>
+<script src="assets/js/plugin/jquery-mapael/maps/world_countries.min.js"></script>
+<script src="assets/js/plugin/chart-circle/circles.min.js"></script>
+<script src="assets/js/plugin/jquery-scrollbar/jquery.scrollbar.min.js"></script>
+<script src="assets/js/ready.min.js"></script>
+<script src="assets/js/demo.js"></script>
+
+<script type="module" src="js/firebase.js"></script>
+
+<script>
+  function renderDeliveredCircle(percent) {
+    const p = Math.max(0, Math.min(100, percent));
+    const el = document.getElementById('task-complete');
+    if (el) el.innerHTML = '';
+
+    Circles.create({
+      id: 'task-complete',
+      radius: 45,
+      value: p,
+      maxValue: 100,
+      width: 7,
+      text: p + '%',
+      duration: 600,
+      wrpClass: 'circles-wrp',
+      textClass: 'circles-text',
+      styleWrapper: true,
+      styleText: true
+    });
+
+    const t = document.getElementById('deliveredPercentText');
+    if (t) t.textContent = p + '%';
+  }
+
+  async function loadDashboardStats() {
+    try {
+      const res = await fetch('/api/stats');
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      const data = await res.json();
+
+      document.getElementById('driversCount').textContent = data.totalDrivers;
+      document.getElementById('packagesCount').textContent = data.totalPackages;
+      document.getElementById('deliveredCount').textContent = data.deliveredPackages;
+      document.getElementById('pendingCount').textContent = data.pendingPackages;
+
+      const total = Number(data.totalPackages) || 0;
+      const delivered = Number(data.deliveredPackages) || 0;
+      const percent = total > 0 ? Math.round((delivered / total) * 100) : 0;
+
+      renderDeliveredCircle(percent);
+    } catch (err) {
+      console.error('Dashboard stats error:', err);
+
+      document.getElementById('driversCount').textContent = 'Err';
+      document.getElementById('packagesCount').textContent = 'Err';
+      document.getElementById('deliveredCount').textContent = 'Err';
+      document.getElementById('pendingCount').textContent = 'Err';
+
+      renderDeliveredCircle(0);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadDashboardStats);
+</script>
+
+</html>
