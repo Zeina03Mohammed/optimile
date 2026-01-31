@@ -19,7 +19,12 @@ class PlacesService {
   /// ================= AUTOCOMPLETE SUGGESTIONS =================
   Future<List<Place>> getSuggestions(String input) async {
     final url =
-        'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&key=$apiKey&sessiontoken=$_sessionToken';
+  'https://maps.googleapis.com/maps/api/place/autocomplete/json'
+  '?input=$input'
+  '&components=country:eg'
+  '&key=$apiKey'
+  '&sessiontoken=$_sessionToken';
+
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) return [];
 
@@ -102,18 +107,29 @@ class PlacesService {
   }
 
   /// ================= GET DIRECTIONS =================
-  Future<Map<String, dynamic>?> getDirections(
-      LatLng origin, LatLng destination) async {
-    final url =
-        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$apiKey';
-    final response = await http.get(Uri.parse(Uri.encodeFull(url)));
-    if (response.statusCode != 200) return null;
+  /// Set [requestTraffic] true to get duration_in_traffic (for traffic monitor).
+ Future<Map<String, dynamic>?> getDirections(
+    LatLng origin, LatLng destination) async {
+  
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  
+  final url =
+      'https://maps.googleapis.com/maps/api/directions/json?'
+      'origin=${origin.latitude},${origin.longitude}&'
+      'destination=${destination.latitude},${destination.longitude}&'
+      'departure_time=$now&'  // ← ADD THIS
+      'traffic_model=best_guess&'  // ← ADD THIS
+      'key=$apiKey';
 
-    final data = json.decode(response.body);
-    if (data['status'] != 'OK') return null;
+  final response = await http.get(Uri.parse(Uri.encodeFull(url)));
+  if (response.statusCode != 200) return null;
 
-    return data['routes'][0];
-  }
+  final data = json.decode(response.body);
+  if (data['status'] != 'OK') return null;
+
+  return data['routes'][0];
+}
+
 
   /// ================= DECODE POLYLINE =================
   List<LatLng> decodePolyline(String encoded) {

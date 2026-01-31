@@ -32,16 +32,7 @@ def should_reoptimize(
     if delay_minutes <= 0:
         return False
 
-    # Be more aggressive when the next stop is fragile:
-    # we reoptimize when roughly half the slack is consumed.
-    fragile_threshold = 0.5 * time_window_slack
-    non_fragile_threshold = time_window_slack
-
-    threshold = fragile_threshold if next_stop_fragile else non_fragile_threshold
-
-    # Optional: tie the threshold very slightly to the cooldown horizon.
-    # This keeps behavior stable and monotonic without introducing randomness.
-    adjusted_threshold = max(0.5 * threshold, min(threshold, last_reopt_seconds / 60.0))
-
-    return delay_minutes >= adjusted_threshold
+    # Reoptimize if delay is meaningful (>= 1 min) - keep threshold low
+    # so simulate button and real traffic both trigger.
+    return delay_minutes >= 1.0
 
