@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'dart:ui';
 import '/viewmodel/authvm.dart';
 import '/view/map_screen.dart';
-import '/view/admin.dart';
 import '/view/signup.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginPage extends StatefulWidget {
   final String? prefilledEmail;
@@ -78,7 +78,7 @@ class _LoginPageState extends State<LoginPage> {
                 return;
               }
 
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context);
 
               final authVM = Provider.of<AuthViewModel>(context, listen: false);
               final result = await authVM.resetPassword(email);
@@ -97,6 +97,25 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // Launch admin dashboard at localhost:3000
+  Future<void> _launchAdminDashboard() async {
+    final Uri url = Uri.parse('http://localhost:3000');
+
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+        _showSnack('Opening admin dashboard...', Colors.green);
+      } else {
+        _showSnack('Could not open admin dashboard at localhost:3000');
+      }
+    } catch (e) {
+      _showSnack('Error opening admin dashboard: ${e.toString()}');
+    }
+  }
+
   void login() async {
     final authVM = Provider.of<AuthViewModel>(context, listen: false);
     final result =
@@ -106,16 +125,15 @@ class _LoginPageState extends State<LoginPage> {
       _showSnack(result['error']);
     } else if (result.containsKey('emailNotVerified') &&
         result['emailNotVerified'] == true) {
-      // Handle email not verified
       _showEmailVerificationDialog();
     } else {
       final role = result['role'];
+
       if (role == 'admin') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminDashboard()),
-        );
+        // Admin: Open localhost:3000 in browser
+        await _launchAdminDashboard();
       } else {
+        // Driver: Navigate to MapScreen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MapScreen()),
@@ -242,7 +260,6 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            // Forgot Password Link
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
