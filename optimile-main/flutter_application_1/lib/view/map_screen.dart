@@ -250,15 +250,7 @@ class _MapView extends StatelessWidget {
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
-                              ),const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text(
-                                  "Delivery Settings",
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
                               ),
-
-                            
                               const SizedBox(width: 8),
                               
                               Container(
@@ -310,38 +302,55 @@ class _MapView extends StatelessWidget {
                                   "${start.format(context)}–${end.format(context)}";
 
                               return ListTile(
-                                leading: Icon(
-                                  Icons.location_on,
-                                  color: color,
-                                  size: 18,
-                                ),
-                                title: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            stop.title ?? 'Stop ${index + 1}',
-                                            style: const TextStyle(
-                                                color: Colors.white),
-                                          ),
-                                        ),
-                                        if (stop.isFragile)
-                                          const Icon(Icons.warning,
-                                              color: Colors.red, size: 16),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "Window: $windowLabel",
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+  leading: Icon(
+    Icons.location_on,
+    color: color,
+    size: 18,
+  ),
+  title: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              stop.title ?? 'Stop ${index + 1}',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          if (stop.isFragile)
+            const Icon(Icons.warning, color: Colors.red, size: 16),
+        ],
+      ),
+      const SizedBox(height: 2),
+      Text(
+        "Window: $windowLabel",
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 12,
+        ),
+      ),
+    ],
+  ),
+
+  
+  onTap: () async {
+    final LatLng target = stop.location;
+
+    await vm.mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: target,
+          zoom: 17,
+        ),
+      ),
+    );
+
+    // close drawer
+    Navigator.of(context).pop();
+  },
+
+
                               );
                             },
                           ).toList(),
