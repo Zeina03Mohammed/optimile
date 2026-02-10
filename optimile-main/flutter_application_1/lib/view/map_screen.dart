@@ -130,7 +130,7 @@ class _MapView extends StatelessWidget {
               ),
             ),
 
-          if (vm.stops.isNotEmpty || vm.navigationStarted)
+          if (vm.hasAnyStops || vm.navigationStarted)
             Positioned(
               bottom: 20,
               left: 16,
@@ -163,6 +163,54 @@ class _MapView extends StatelessWidget {
                         vm.distance,
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
+                    if (!vm.navigationStarted && vm.routes.length > 1) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            "Stops go to: ",
+                            style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: vm.routes[vm.selectedRouteIndex].color.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButton<int>(
+                              value: vm.selectedRouteIndex,
+                              isDense: true,
+                              underline: const SizedBox(),
+                              items: List.generate(
+                                vm.routes.length,
+                                (i) => DropdownMenuItem(
+                                  value: i,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: vm.routes[i].color,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(vm.routes[i].name),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              onChanged: (i) {
+                                if (i != null) vm.setSelectedRoute(i);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
   Row(
     children: [
       const Text("Vehicle:", style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
@@ -181,17 +229,18 @@ class _MapView extends StatelessWidget {
       ),
     ],
   ),
-
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         if (!vm.navigationStarted) ...[
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () async {
-                                await vm.optimizeRoute(context);
-                                await vm.startRide(context);
-                              },
+                              onPressed: vm.canStart
+                                  ? () async {
+                                      await vm.optimizeRoute(context);
+                                      await vm.startRide(context);
+                                    }
+                                  : null,
                               icon: const Icon(Icons.play_arrow),
                               label: const Text("Start"),
                             ),
@@ -203,7 +252,7 @@ class _MapView extends StatelessWidget {
                               onPressed: () async =>
                                   await vm.simulateTraffic(context),
                               icon: const Icon(Icons.traffic, size: 18),
-                              label: const Text("Simulate traffic"),
+                              label: const Text("Simulate"),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -233,135 +282,203 @@ class _MapView extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            child: vm.stops.isNotEmpty
+            child: vm.hasAnyStops || vm.routes.isNotEmpty
                 ? ListView(
                     children: [
+                      if (!vm.navigationStarted)
+                        ListTile(
+                          leading: const Icon(Icons.add_circle_outline,
+                              color: Colors.white),
+                          title: const Text(
+                            'Add route (another car)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          onTap: () {
+                            vm.addRoute();
+                          },
+                        ),
+                      const Divider(color: Colors.grey),
                       Theme(
                         data: Theme.of(context).copyWith(
                           dividerColor: Colors.transparent,
                         ),
-                        child: ExpansionTile(
-                          initiallyExpanded: true,
-                          title: Row(
-                            children: [
-                              const Text(
-                                'Current Route',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: vm.navigationStarted
-                                      ? Colors.blue
-                                      : Colors.grey,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  vm.navigationStarted ? 'ACTIVE' : 'IDLE',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: vm.routes.asMap().entries.map((routeEntry) {
+                          final routeIndex = routeEntry.key;
+                          final routeModel = routeEntry.value;
+                          final routeStops = routeModel.stops;
+                          final isSelected =
+                              vm.selectedRouteIndex == routeIndex;
+                          final isActive =
+                              vm.navigationStarted &&
+                                  vm.activeRouteIndex == routeIndex;
+
+                          return ExpansionTile(
+                            initiallyExpanded: isSelected || routeStops.isNotEmpty,
+                            title: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: routeModel.color,
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          iconColor: Colors.white,
-                          collapsedIconColor: Colors.white,
-                          children: vm.stops.asMap().entries.map(
-                            (entry) {
-                              final index = entry.key;
-                              final stop = entry.value;
-
-                              Color color;
-                              if (vm.navigationStarted &&
-                                  index < vm.currentStopIndex) {
-                                color = Colors.green;
-                              } else if (vm.navigationStarted &&
-                                  index == vm.currentStopIndex) {
-                                color = Colors.blue;
-                              } else {
-                                color = Colors.orange;
-                              }
-
-                              final start = TimeOfDay(
-                                  hour: (stop.windowStartMin ~/ 60),
-                                  minute: (stop.windowStartMin % 60));
-                              final end = TimeOfDay(
-                                  hour: (stop.windowEndMin ~/ 60),
-                                  minute: (stop.windowEndMin % 60));
-
-                              final windowLabel =
-                                  "${start.format(context)}–${end.format(context)}";
-
-                              return ListTile(
-  leading: Icon(
-    Icons.location_on,
-    color: color,
-    size: 18,
-  ),
-  title: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              stop.title ?? 'Stop ${index + 1}',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-          if (stop.isFragile)
-            const Icon(Icons.warning, color: Colors.red, size: 16),
-        ],
-      ),
-      const SizedBox(height: 2),
-      Text(
-        "Window: $windowLabel",
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 12,
-        ),
-      ),
-    ],
-  ),
-
-  
-  onTap: () async {
-    final LatLng target = stop.location;
-
-    await vm.mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: target,
-          zoom: 17,
-        ),
-      ),
-    );
-
-    // close drawer
-    Navigator.of(context).pop();
-  },
-
-
-                              );
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    routeModel.name,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                if (vm.routes.length > 1 && !vm.navigationStarted)
+                                  IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                                    onPressed: () => vm.removeRoute(routeIndex),
+                                  ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? Colors.green
+                                        : isSelected
+                                            ? Colors.blue
+                                            : Colors.grey,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isActive
+                                        ? 'ACTIVE'
+                                        : isSelected
+                                            ? 'SELECTED'
+                                            : 'IDLE',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            iconColor: Colors.white,
+                            collapsedIconColor: Colors.white,
+                            onExpansionChanged: (expanded) {
+                              if (expanded) vm.setSelectedRoute(routeIndex);
                             },
-                          ).toList(),
+                            children: [
+                              ListTile(
+                                title: Text(
+                                  routeStops.isEmpty
+                                      ? 'Tap map to add stops'
+                                      : '${routeStops.length} stop(s)',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                onTap: () {
+                                  vm.setSelectedRoute(routeIndex);
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                              ...routeStops.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final stop = entry.value;
+
+                                Color color;
+                                if (vm.navigationStarted && isActive) {
+                                  if (index < vm.currentStopIndex) {
+                                    color = Colors.green;
+                                  } else if (index == vm.currentStopIndex) {
+                                    color = Colors.blue;
+                                  } else {
+                                    color = Colors.orange;
+                                  }
+                                } else {
+                                  color = routeModel.color;
+                                }
+
+                                final start = TimeOfDay(
+                                    hour: (stop.windowStartMin ~/ 60),
+                                    minute: (stop.windowStartMin % 60));
+                                final end = TimeOfDay(
+                                    hour: (stop.windowEndMin ~/ 60),
+                                    minute: (stop.windowEndMin % 60));
+                                final windowLabel =
+                                    "${start.format(context)}–${end.format(context)}";
+
+                                return ListTile(
+                                  leading: Icon(
+                                    Icons.location_on,
+                                    color: color,
+                                    size: 18,
+                                  ),
+                                  title: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              stop.title ?? 'Stop ${index + 1}',
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                          ),
+                                          if (stop.isFragile)
+                                            const Icon(Icons.warning,
+                                                color: Colors.red, size: 16),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "Window: $windowLabel",
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  onTap: () async {
+                                    vm.setSelectedRoute(routeIndex);
+                                    await vm.mapController?.animateCamera(
+                                      CameraUpdate.newCameraPosition(
+                                        CameraPosition(
+                                          target: stop.location,
+                                          zoom: 17,
+                                        ),
+                                      ),
+                                    );
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                                );
+                              }),
+                            ],
+                          );
+                        }).toList(),
                         ),
                       ),
                     ],
                   )
                 : const Center(
                     child: Text(
-                      'No active route',
+                      'No routes. Add a route and tap the map to add stops.',
                       style: TextStyle(color: Colors.grey),
+                      textAlign: TextAlign.center,
                     ),
                   ),
           ),

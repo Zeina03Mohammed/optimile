@@ -60,7 +60,7 @@ python3 demo_alns_scenario.py --mode api 2>&1 | tee -a committee_stats.txt
    ```
 
 2. **Set backend URL in `env.dart`**:
-   - **iOS Simulator** (app and backend on same Mac): `http://127.0.0.1:8000`
+   - **iOS Simulator** (app and backend on same Mac): `http://172.20.10.7:8000`
    - **Real iPhone** (phone and Mac on same Wi‑Fi): `http://YOUR_MAC_IP:8000` (e.g. `http://192.168.1.x:8000`)
 
 3. **Run app** (Terminal 2):

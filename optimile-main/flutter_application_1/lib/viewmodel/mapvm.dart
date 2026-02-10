@@ -17,6 +17,8 @@ class MapVM extends ChangeNotifier {
   final FirestoreService firestoreService = FirestoreService();
 String vehicleType = "van";
 bool isFragile = false;
+  /// When true, backend uses Bellman–Ford on the chosen locations (and current position).
+  bool useBellmanFord = true;
   // ================= MAP =================
   GoogleMapController? mapController;
   LatLng? currentLocation;
@@ -30,8 +32,30 @@ bool isFragile = false;
   List<LatLng> _plannedRoutePoints = [];
   DateTime? _lastReoptTime;
 
-  // ================= ROUTE =================
-  List<Stop> stops = [];
+  // ================= ROUTE (multi-route = multiple cars) =================
+  List<RouteModel> _routes = [
+    RouteModel(id: '1', name: 'Car 1', color: kRouteColors[0]),
+  ];
+  int _selectedRouteIndex = 0;
+  /// When navigation is started, this is the route we're actually driving.
+  int _activeRouteIndex = 0;
+
+  List<RouteModel> get routes => _routes;
+  int get selectedRouteIndex => _selectedRouteIndex;
+  int get activeRouteIndex => _activeRouteIndex;
+
+  /// Stops of the route currently selected for editing (or active when navigating).
+  List<Stop> get currentStops =>
+      _routes[_selectedRouteIndex].stops;
+  /// When navigating: active route's stops. Otherwise: selected route's stops (for backward compat).
+  List<Stop> get stops =>
+      navigationStarted ? _routes[_activeRouteIndex].stops : currentStops;
+
+  bool get hasAnyStops => _routes.any((r) => r.stops.isNotEmpty);
+
+  bool get canStart =>
+      currentLocation != null && _routes.any((r) => r.stops.length >= 2);
+
   final Map<Stop, String> stopTitles = {};
   final Set<Marker> markers = {};
   final Set<Polyline> polylines = {};
@@ -84,6 +108,11 @@ void setFragile(bool value) {
   isFragile = value;
   notifyListeners();
 }
+
+void setUseBellmanFord(bool value) {
+  useBellmanFord = value;
+  notifyListeners();
+}
   Future<List<Place>> getSuggestions(String query) {
     return _placesService.getSuggestions(query);
   }
@@ -94,7 +123,7 @@ void setFragile(bool value) {
 
     if (latLng != null) {
       final stop = Stop(location: latLng, title: place.description);
-      stops.add(stop);
+      _routes[_selectedRouteIndex].stops.add(stop);
       stopTitles[stop] = place.description;
       rebuildMap();
       mapController?.animateCamera(CameraUpdate.newLatLngZoom(latLng, 15));
@@ -184,137 +213,169 @@ void addStop(
     windowEndMin: windowEndMin,
   );
 
-  stops.add(stop);
+  _routes[_selectedRouteIndex].stops.add(stop);
   rebuildMap();
 }
 
   void removeStop(int index) {
     if (navigationStarted) return;
-    final stopToRemove = stops[index];
-    stops.removeAt(index);
+    final route = _routes[_selectedRouteIndex];
+    if (index >= route.stops.length) return;
+    final stopToRemove = route.stops[index];
+    route.stops.removeAt(index);
     stopTitles.remove(stopToRemove);
     rebuildMap();
   }
 
+  void addRoute() {
+    if (navigationStarted) return;
+    final nextId = '${_routes.length + 1}';
+    final color = kRouteColors[_routes.length % kRouteColors.length];
+    _routes.add(RouteModel(
+      id: nextId,
+      name: 'Car ${_routes.length + 1}',
+      color: color,
+    ));
+    _selectedRouteIndex = _routes.length - 1;
+    notifyListeners();
+  }
+
+  void removeRoute(int index) {
+    if (navigationStarted) return;
+    if (_routes.length <= 1) return;
+    for (final s in _routes[index].stops) stopTitles.remove(s);
+    _routes.removeAt(index);
+    if (_selectedRouteIndex >= _routes.length) _selectedRouteIndex = _routes.length - 1;
+    if (_activeRouteIndex >= _routes.length) _activeRouteIndex = _routes.length - 1;
+    rebuildMap();
+  }
+
+  void setSelectedRoute(int index) {
+    if (index >= 0 && index < _routes.length) {
+      _selectedRouteIndex = index;
+      notifyListeners();
+    }
+  }
+
   // ================= OPTIMIZE =================
   Future<void> optimizeRoute(BuildContext context) async {
-  if (stops.length < 2 || currentLocation == null) {
+  if (currentLocation == null) return;
+  final routesToOptimize = <int>[];
+  for (int i = 0; i < _routes.length; i++) {
+    if (_routes[i].stops.length >= 2) routesToOptimize.add(i);
+  }
+  if (routesToOptimize.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Add at least two stops")),
+      const SnackBar(content: Text("Add at least two stops to a route")),
     );
     return;
   }
 
-  // ---------- BASELINE ETA (Google Maps) ----------
-  double initialEta = 0;
-  LatLng origin = currentLocation!;
-
-  for (final stop in stops) {
-    final route = await _placesService.getDirections(origin, stop.location);
-    if (route == null) return;
-    initialEta += route["legs"][0]["duration"]["value"] / 60.0;
-    origin = stop.location;
-  }
-
-  // Keep original order SAFE
-  final List<Stop> originalStops = List.from(stops);
-
-  // ---------- BACKEND CALL ----------
   final now = TimeOfDay.now();
   final startMinutes = now.hour * 60 + now.minute;
-
-  final payload = {
-    "stops": stops.map((s) => s.toPayload()).toList(),
-    "vehicle": vehicleType, // motorcycle | scooter | van
-    "traffic": "Medium",
-    "weather": "Sunny",
-    "start_time": startMinutes, // minutes since midnight
-  };
+  int optimizedCount = 0;
 
   try {
-    final response = await http.post(
-      Uri.parse("${Env.backendBaseUrl}/optimize"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(payload),
-    );
+    for (final routeIndex in routesToOptimize) {
+      final route = _routes[routeIndex];
+      final routeStops = route.stops;
 
-    if (response.statusCode != 200) {
-      throw Exception("Backend error");
-    }
+      double initialEta = 0;
+      LatLng origin = currentLocation!;
+      for (final stop in routeStops) {
+        final r = await _placesService.getDirections(origin, stop.location);
+        if (r == null) continue;
+        initialEta += r["legs"][0]["duration"]["value"] / 60.0;
+        origin = stop.location;
+      }
 
-    final optimizedStops =
-        (jsonDecode(response.body)["optimized_route"] as List)
-            .map<Stop>((s) {
-      final int windowStart = (s["window_start"] as int?) ?? 0;
-      final int windowEnd = (s["window_end"] as int?) ?? 24 * 60;
+      final List<Stop> originalStops = List.from(routeStops);
+      final payload = {
+        "stops": routeStops.map((s) => s.toPayload()).toList(),
+        "vehicle": vehicleType,
+        "traffic": "Medium",
+        "weather": "Sunny",
+        "start_time": startMinutes,
+        "use_bellman_ford": false,
+      };
 
-      return Stop(
-        location: LatLng(s["lat"], s["lng"]),
-        isFragile: s["is_fragile"] ?? false,
-        windowStartMin: windowStart,
-        windowEndMin: windowEnd,
-        estimatedTime: windowStart.toDouble(),
-        actualTime: windowEnd.toDouble(),
+      final response = await http.post(
+        Uri.parse("${Env.backendBaseUrl}/optimize"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
       );
-    }).toList();
 
-    // ---------- OPTIMIZED ETA ----------
-    double optimizedEta = 0;
-    origin = currentLocation!;
+      if (response.statusCode != 200) continue;
 
-    for (final stop in optimizedStops) {
-      final route = await _placesService.getDirections(origin, stop.location);
-      if (route == null) return;
-      optimizedEta += route["legs"][0]["duration"]["value"] / 60.0;
-      origin = stop.location;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final optimizedStops =
+          (body["optimized_route"] as List)
+              .map<Stop>((s) {
+        final int windowStart = (s["window_start"] as int?) ?? 0;
+        final int windowEnd = (s["window_end"] as int?) ?? 24 * 60;
+        return Stop(
+          location: LatLng(s["lat"], s["lng"]),
+          isFragile: s["is_fragile"] ?? false,
+          windowStartMin: windowStart,
+          windowEndMin: windowEnd,
+          estimatedTime: windowStart.toDouble(),
+          actualTime: windowEnd.toDouble(),
+        );
+      }).toList();
+
+      double optimizedEta = 0;
+      origin = currentLocation!;
+      for (final stop in optimizedStops) {
+        final r = await _placesService.getDirections(origin, stop.location);
+        if (r == null) break;
+        optimizedEta += r["legs"][0]["duration"]["value"] / 60.0;
+        origin = stop.location;
+      }
+
+      final improvement = initialEta - optimizedEta;
+      if (improvement > 0.5) {
+        route.stops
+          ..clear()
+          ..addAll(optimizedStops);
+        optimizedCount++;
+      }
     }
-
-    // ---------- VALIDATION ----------
-    final improvement = initialEta - optimizedEta;
-    final percent = (improvement / initialEta) * 100;
-
-    debugPrint(
-        "ALNS /optimize baseline=${initialEta.toStringAsFixed(2)} min, "
-        "optimized=${optimizedEta.toStringAsFixed(2)} min, "
-        "improvement=${improvement.toStringAsFixed(2)} min "
-        "(${percent.toStringAsFixed(1)}%)");
-
-    if (improvement <= 0.5) {
-      // Reject bad optimization
-      stops
-        ..clear()
-        ..addAll(originalStops);
-      rebuildMap();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Route already near-optimal")),
-      );
-      return;
-    }
-
-    // ---------- ACCEPT OPTIMIZATION ----------
-    stops
-      ..clear()
-      ..addAll(optimizedStops);
 
     await rebuildMap();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "Improvement: ${percent.toStringAsFixed(1)}%",
-        ),
-        duration: const Duration(seconds: 6),
-      ),
-    );
-
-    await firestoreService.saveDeliveryToFirestore(
-      initialEta,
-      optimizedEta,
-      stops,
-    );
+    if (context.mounted) {
+      if (optimizedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              optimizedCount == routesToOptimize.length
+                  ? "All $optimizedCount route(s) optimized"
+                  : "$optimizedCount of ${routesToOptimize.length} route(s) optimized",
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        if (optimizedCount == 1) {
+          final idx = routesToOptimize.first;
+          await firestoreService.saveDeliveryToFirestore(
+            0,
+            0,
+            _routes[idx].stops,
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Routes already near-optimal")),
+        );
+      }
+    }
   } catch (e) {
     debugPrint("Optimization error: $e");
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Optimization failed: $e")),
+      );
+    }
   }
 }
   // ================= REBUILD MAP =================
@@ -324,51 +385,70 @@ void addStop(
 
   if (currentLocation == null) return;
 
-  LatLng origin = currentLocation!;
   double totalSeconds = 0;
   double totalMeters = 0;
 
-  for (int i = 0; i < stops.length; i++) {
-    final stop = stops[i];
+  for (int r = 0; r < _routes.length; r++) {
+    final routeModel = _routes[r];
+    final routeStops = routeModel.stops;
+    if (routeStops.isEmpty) continue;
 
-    markers.add(
-      Marker(
-        markerId: MarkerId('stop_$i'),
-        position: stop.location,
-        infoWindow: InfoWindow(title: stopTitles[stop] ?? 'Stop ${i + 1}'),
-      ),
-    );
-
-    final route = await _placesService.getDirections(origin, stop.location);
-    if (route == null) continue;
-
-    final leg = route["legs"][0];
-    totalSeconds += leg["duration"]["value"];
-    totalMeters += leg["distance"]["value"];
-
-    polylines.add(
-      Polyline(
-        polylineId: PolylineId('route_$i'),
-        points: _placesService.decodePolyline(
-          route["overview_polyline"]["points"],
+    LatLng origin = currentLocation!;
+    for (int i = 0; i < routeStops.length; i++) {
+      final stop = routeStops[i];
+      markers.add(
+        Marker(
+          markerId: MarkerId('stop_r${r}_s$i'),
+          position: stop.location,
+          infoWindow: InfoWindow(
+            title: stopTitles[stop] ?? '${routeModel.name} Stop ${i + 1}',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            HSVColor.fromColor(routeModel.color).hue,
+          ),
         ),
-        width: 5,
-        color: Colors.blue,
-      ),
-    );
+      );
 
-    origin = stop.location;
+      final route = await _placesService.getDirections(origin, stop.location);
+      if (route == null) continue;
+
+      final leg = route["legs"][0];
+      totalSeconds += leg["duration"]["value"];
+      totalMeters += leg["distance"]["value"];
+
+      polylines.add(
+        Polyline(
+          polylineId: PolylineId('poly_r${r}_s$i'),
+          points: _placesService.decodePolyline(
+            route["overview_polyline"]["points"],
+          ),
+          width: 5,
+          color: routeModel.color,
+        ),
+      );
+
+      origin = stop.location;
+    }
   }
 
   distance = "${(totalMeters / 1000).toStringAsFixed(1)} km";
   duration = "${(totalSeconds / 60).round()} min";
 
   notifyListeners();
-}
+  }
   // ================= START RIDE =================
   Future<void> startRide(BuildContext context) async {
-    if (stops.isEmpty || currentLocation == null) return;
+    if (currentLocation == null) return;
+    int firstWithStops = -1;
+    for (int i = 0; i < _routes.length; i++) {
+      if (_routes[i].stops.isNotEmpty) {
+        firstWithStops = i;
+        break;
+      }
+    }
+    if (firstWithStops < 0) return;
 
+    _activeRouteIndex = firstWithStops;
     navigationStarted = true;
     routeStatus = 'active';
     currentStopIndex = 0;
@@ -462,8 +542,10 @@ void addStop(
   // ================= STOP =================
 
 void clearRoute({bool keepCurrentLocationMarker = true}) {
-  stops.clear();
-  stopTitles.clear();
+  for (final r in _routes) {
+    for (final s in r.stops) stopTitles.remove(s);
+    r.stops.clear();
+  }
   polylines.clear();
   _plannedRoutePoints.clear();
 
@@ -511,21 +593,163 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
     await rebuildMap();
   }
 
-  /// Simulate traffic incident: tries backend first; if unreachable, runs offline demo reroute.
+  /// Simulate traffic: run ALNS and ALNS+Bellman–Ford on the same route/incident, then apply the better result.
   Future<void> simulateTraffic(BuildContext context) async {
     if (!navigationStarted || stops.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("🔧 Simulating traffic/incident...")),
-    );
-    final ok = await reoptimizeRoute(
-      context: context,
-      reason: "traffic_jam",
-      severity: 0.5,
-      affectedStopIndex: currentStopIndex,
-    );
-    if (!ok && context.mounted) {
-      await _runOfflineDemoReroute(context);
+
+    _isReoptimizing = true;
+    _lastReoptTime = DateTime.now();
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("🔧 Simulating: ALNS vs ALNS+BF on same incident…")),
+      );
     }
+
+    final payload = {
+      "current_lat": currentLocation!.latitude,
+      "current_lng": currentLocation!.longitude,
+      "remaining_stops":
+          stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
+      "vehicle": vehicleType,
+      "traffic": "Heavy",
+      "weather": "Sunny",
+      "reason": "traffic_jam",
+      "severity": 0.5,
+      "simulate": true,
+      "google_maps_api_key": Env.googleMapsApiKey,
+    };
+
+    try {
+      // 1) ALNS
+      final payloadAlns = {...payload, "use_bellman_ford": false};
+      final responseAlns = await http
+          .post(
+            Uri.parse("${Env.backendBaseUrl}/reoptimize"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(payloadAlns),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      // 2) ALNS + Bellman–Ford
+      final payloadBf = {...payload, "use_bellman_ford": true};
+      final responseBf = await http
+          .post(
+            Uri.parse("${Env.backendBaseUrl}/reoptimize"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(payloadBf),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      double? etaAlns;
+      List<Stop>? routeAlns;
+      if (responseAlns.statusCode == 200) {
+        final body = jsonDecode(responseAlns.body) as Map<String, dynamic>;
+        if (body["rerouted"] == true && body["optimized_route"] != null) {
+          routeAlns = _parseOptimizedRoute(body["optimized_route"] as List);
+          etaAlns = await _measureEtaFromStops(routeAlns!);
+        }
+      }
+
+      double? etaBf;
+      List<Stop>? routeBf;
+      if (responseBf.statusCode == 200) {
+        final body = jsonDecode(responseBf.body) as Map<String, dynamic>;
+        if (body["rerouted"] == true && body["optimized_route"] != null) {
+          routeBf = _parseOptimizedRoute(body["optimized_route"] as List);
+          etaBf = await _measureEtaFromStops(routeBf!);
+        }
+      }
+
+      // Baseline ETA (current route)
+      double before = 0;
+      LatLng origin = currentLocation!;
+      for (final stop in stops) {
+        final route = await _placesService.getDirections(origin, stop.location);
+        if (route == null) break;
+        before += route["legs"][0]["duration"]["value"] / 60.0;
+        origin = stop.location;
+      }
+
+      // Apply the better of the two (or the only one we got)
+      List<Stop>? toApply;
+      String message;
+      if (routeAlns != null && routeBf != null && etaAlns != null && etaBf != null) {
+        if (etaAlns <= etaBf) {
+          toApply = routeAlns;
+          message = "Simulate: ALNS ${etaAlns.toStringAsFixed(1)} min, ALNS+BF ${etaBf.toStringAsFixed(1)} min — applied ALNS";
+        } else {
+          toApply = routeBf;
+          message = "Simulate: ALNS ${etaAlns.toStringAsFixed(1)} min, ALNS+BF ${etaBf.toStringAsFixed(1)} min — applied ALNS+BF";
+        }
+      } else if (routeAlns != null && etaAlns != null) {
+        toApply = routeAlns;
+        message = "Simulate: ALNS ${etaAlns.toStringAsFixed(1)} min (ALNS+BF unavailable)";
+      } else if (routeBf != null && etaBf != null) {
+        toApply = routeBf;
+        message = "Simulate: ALNS+BF ${etaBf.toStringAsFixed(1)} min (ALNS unavailable)";
+      } else {
+        message = "Simulate: no reroute from backend";
+      }
+
+      if (toApply != null) {
+        final after = toApply == routeAlns ? (etaAlns ?? 0) : (etaBf ?? 0);
+        stops
+          ..clear()
+          ..addAll(toApply);
+        await rebuildMap();
+        if (context.mounted) {
+          final extra = after < before
+              ? " (${(before - after).toStringAsFixed(1)} min faster)"
+              : " — no improvement over current route";
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("$message$extra"), duration: const Duration(seconds: 4)),
+          );
+        }
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+        );
+      }
+    } catch (e) {
+      debugPrint("Simulate error: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Simulate failed: $e")),
+        );
+      }
+    } finally {
+      _isReoptimizing = false;
+    }
+  }
+
+  static List<Stop> _parseOptimizedRoute(List list) {
+    return list.map<Stop>((s) {
+      final m = s as Map<String, dynamic>;
+      final int windowStart = (m["window_start"] as int?) ?? 0;
+      final int windowEnd = (m["window_end"] as int?) ?? 24 * 60;
+      return Stop(
+        location: LatLng(m["lat"], m["lng"]),
+        isFragile: m["is_fragile"] ?? false,
+        windowStartMin: windowStart,
+        windowEndMin: windowEnd,
+        estimatedTime: windowStart.toDouble(),
+        actualTime: windowEnd.toDouble(),
+      );
+    }).toList();
+  }
+
+  Future<double?> _measureEtaFromStops(List<Stop> stopList) async {
+    if (currentLocation == null) return null;
+    double eta = 0;
+    LatLng origin = currentLocation!;
+    for (final stop in stopList) {
+      final route = await _placesService.getDirections(origin, stop.location);
+      if (route == null) return null;
+      eta += route["legs"][0]["duration"]["value"] / 60.0;
+      origin = stop.location;
+    }
+    return eta;
   }
 
   /// Offline demo: reroute remaining stops locally (for committee when backend unreachable).
@@ -667,11 +891,13 @@ void startTrafficMonitor(BuildContext context) {
 }
 // ================= REOPTIMIZE =================
 /// Returns true if reroute succeeded (backend + ETA improved), false otherwise.
+/// [useBellmanFord] when true uses ALNS + Bellman–Ford reoptimize.
 Future<bool> reoptimizeRoute({
   BuildContext? context,
   required String reason,
   required double severity,
   required int affectedStopIndex,
+  bool useBellmanFord = false,
 }) async {
   if (!navigationStarted || _isReoptimizing || stops.isEmpty) return false;
 
@@ -699,6 +925,8 @@ Future<bool> reoptimizeRoute({
       "weather": "Sunny",
       "reason": reason,
       "severity": severity,
+      "use_bellman_ford": useBellmanFord,
+      if (useBellmanFord) "google_maps_api_key": Env.googleMapsApiKey,
     };
 
     final response = await http
@@ -758,8 +986,9 @@ Future<bool> reoptimizeRoute({
     final delta = before - after;
     final percent = (delta / before) * 100;
 
+    final algo = useBellmanFord ? "ALNS+Bellman–Ford" : "ALNS";
     debugPrint(
-        "ALNS /reoptimize reason=$reason "
+        "$algo /reoptimize reason=$reason "
         "baseline=${before.toStringAsFixed(2)} min, "
         "optimized=${after.toStringAsFixed(2)} min, "
         "improvement=${delta.toStringAsFixed(2)} min "
@@ -767,7 +996,16 @@ Future<bool> reoptimizeRoute({
 
     if (after >= before) {
       _isReoptimizing = false;
-      return false; // reject bad reoptimization
+      if (context != null && context.mounted) {
+        final algoLabel = useBellmanFord ? "ALNS+Bellman–Ford" : "ALNS";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("$algoLabel: route unchanged (same ETA – already optimal)"),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return false; // no improvement
     }
 
     final liveIncidentsFound = body["live_incidents_found"] == true;
@@ -804,8 +1042,11 @@ Future<bool> reoptimizeRoute({
   } catch (e, st) {
     debugPrint("Reoptimization error: $e\n$st");
     if (context != null && context.mounted) {
+      final msg = e.toString().contains("Connection refused")
+          ? "Backend not running. Start server (uvicorn) on port 8000 or check Env.backendBaseUrl."
+          : "Backend unreachable. Use offline demo.";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Backend unreachable. Use offline demo.")),
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
       );
     }
     return false;
