@@ -4,7 +4,7 @@ import requests
 import time
 from pprint import pprint
 
-BASE_URL = "http://172.20.10.7:8000"
+BASE_URL = "http://127.0.0.1:8000"
 
 
 def build_route():

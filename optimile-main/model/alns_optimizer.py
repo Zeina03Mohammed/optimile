@@ -262,14 +262,10 @@ def optimize_route(
     start_time_min,
     iters=400,
     seed=None,
-    initial_route=None,
     explain: bool = False,
 ):
     n = len(coords)
-    if initial_route is not None and len(initial_route) == n and set(initial_route) == set(range(n)):
-        best = list(initial_route)
-    else:
-        best = list(range(n))
+    best = list(range(n))
 
     # Deterministic RNG for statistical stability
     rng = random.Random(seed if seed is not None else 42)
