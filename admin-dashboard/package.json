@@ -1,0 +1,19 @@
+{
+  "name": "optimile-admin-dashboard",
+  "version": "1.0.0",
+  "description": "Optimile admin dashboard - Express server + static frontend",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
