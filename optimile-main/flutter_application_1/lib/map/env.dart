@@ -9,5 +9,9 @@ class Env {
   // Directions API URL
   static const directionsApiUrl =
       'https://maps.googleapis.com/maps/api/directions/json';
+
+  /// Backend API base URL. Empty = same origin (use when app is served from FastAPI).
+  /// For local dev with separate backend use 'http://127.0.0.1:8000'.
+  static const String backendBaseUrl = '';
 }
 

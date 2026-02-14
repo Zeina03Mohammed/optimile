@@ -216,7 +216,7 @@ Future<void> _optimizeRoute() async {
 
   try {
     final response = await http.post(
-      Uri.parse("http://127.0.0.1:8000/optimize"),
+      Uri.parse(Env.backendBaseUrl.isEmpty ? '/optimize' : '${Env.backendBaseUrl}/optimize'),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(body),
     );

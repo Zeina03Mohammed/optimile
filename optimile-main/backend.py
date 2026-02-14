@@ -1,10 +1,21 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
+import os
 import pandas as pd
 import optimile_model as om
 
 app = FastAPI()
+
+# Allow browser requests from any origin (e.g. Flutter web on same or different host)
+app.add_middleware(
+    "fastapi.middleware.cors.CORSMiddleware",
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Stop(BaseModel):
@@ -33,7 +44,7 @@ class OptimizeRequest(BaseModel):
 @app.post("/optimize")
 def optimize_route(request: OptimizeRequest):
 
-    df = pd.DataFrame([s.dict() for s in request.stops])
+    df = pd.DataFrame([s.model_dump() for s in request.stops])
 
     if len(df) < 2:
         return {"error": "At least 2 stops are required"}
@@ -54,3 +65,9 @@ def optimize_route(request: OptimizeRequest):
         "optimized_cost": float(best_cost),
         "optimized_route": result
     }
+
+
+# Serve Flutter web app at root when deployed (build output in static/)
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="app")
