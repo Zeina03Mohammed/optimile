@@ -18,9 +18,12 @@ class PlacesService {
 
   /// ================= AUTOCOMPLETE SUGGESTIONS =================
   Future<List<Place>> getSuggestions(String input) async {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return [];
+
     final url =
   'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-  '?input=$input'
+  '?input=${Uri.encodeComponent(trimmed)}'
   '&components=country:eg'
   '&key=$apiKey'
   '&sessiontoken=$_sessionToken';
