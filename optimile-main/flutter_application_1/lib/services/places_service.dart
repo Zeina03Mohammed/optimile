@@ -2,18 +2,19 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '/env.dart';
-import '../models/stop_model.dart'; 
+import '../models/stop_model.dart';
 
 class PlacesService {
   final String apiKey;
-  String _sessionToken = UniqueKey().toString();
+  String _sessionToken = const Uuid().v4();
 
   PlacesService({this.apiKey = Env.googleMapsApiKey});
 
   /// Reset session token after a selection
   void resetSession() {
-    _sessionToken = UniqueKey().toString();
+    _sessionToken = const Uuid().v4();
   }
 
   /// ================= AUTOCOMPLETE SUGGESTIONS =================
@@ -25,8 +26,8 @@ class PlacesService {
   'https://maps.googleapis.com/maps/api/place/autocomplete/json'
   '?input=${Uri.encodeComponent(trimmed)}'
   '&components=country:eg'
-  '&key=$apiKey'
-  '&sessiontoken=$_sessionToken';
+  '&key=${Uri.encodeComponent(apiKey)}'
+  '&sessiontoken=${Uri.encodeComponent(_sessionToken)}';
 
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) return [];
