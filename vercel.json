@@ -1,0 +1,6 @@
+{
+  "installCommand": "if [ ! -d flutter ]; then git clone --depth 1 https://github.com/flutter/flutter.git; fi && flutter/bin/flutter --version",
+  "buildCommand": "cd optimile-main/flutter_application_1 && ../../flutter/bin/flutter pub get && ../../flutter/bin/flutter build web",
+  "outputDirectory": "optimile-main/flutter_application_1/build/web",
+  "framework": null
+}
