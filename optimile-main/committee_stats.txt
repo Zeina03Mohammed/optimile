@@ -1,0 +1,158 @@
+=== Optimile Committee Demo - Sat Jan 31 17:30:49 EET 2026 ===
+
+--- 1. Traffic stress test (same route, different traffic levels) ---
+=== Traffic stress test ===
+[TRAFFIC] level=Low    cost=0.167
+[TRAFFIC] level=Normal cost=0.185
+[TRAFFIC] level=Medium cost=0.213
+[TRAFFIC] level=Heavy  cost=0.250
+
+=== Incident stress test ===
+[INCIDENT] kind=traffic_jam cost=35.185
+[INCIDENT] kind=accident    cost=60.185
+[INCIDENT] kind=road_closed cost=200.185
+
+=== Stability check ===
+[STABILITY] reference order=[0, 1, 2, 3] cost=0.171
+[STABILITY] run=1 order=[0, 1, 2, 3] cost=0.171
+[STABILITY] run=2 order=[0, 1, 2, 3] cost=0.171
+[STABILITY] run=3 order=[0, 1, 2, 3] cost=0.171
+[STABILITY] run=4 order=[0, 1, 2, 3] cost=0.171
+
+=== ROBUSTNESS BENCHMARK (ETA-based) ===
+[ROBUST] stops= 4 veh=motorcycle traf=Low    mean_imp=281.34 std=440.59 min=  0.01 max=1453.73
+[ROBUST] stops= 4 veh=motorcycle traf=Normal mean_imp=281.40 std=440.65 min=  0.01 max=1453.92
+[ROBUST] stops= 4 veh=motorcycle traf=Medium mean_imp=281.49 std=440.74 min=  0.01 max=1454.21
+[ROBUST] stops= 4 veh=motorcycle traf=Heavy  mean_imp=281.61 std=440.86 min=  0.01 max=1454.59
+[ROBUST] stops= 4 veh=scooter    traf=Low    mean_imp=281.45 std=440.70 min=  0.01 max=1454.07
+[ROBUST] stops= 4 veh=scooter    traf=Normal mean_imp=281.52 std=440.77 min=  0.01 max=1454.30
+[ROBUST] stops= 4 veh=scooter    traf=Medium mean_imp=281.63 std=440.87 min=  0.01 max=1454.65
+[ROBUST] stops= 4 veh=scooter    traf=Heavy  mean_imp=281.77 std=441.02 min=  0.01 max=1455.11
+[ROBUST] stops= 4 veh=van        traf=Low    mean_imp=281.61 std=440.86 min=  0.01 max=1454.59
+[ROBUST] stops= 4 veh=van        traf=Normal mean_imp=281.70 std=440.94 min=  0.01 max=1454.88
+[ROBUST] stops= 4 veh=van        traf=Medium mean_imp=281.84 std=441.08 min=  0.01 max=1455.31
+[ROBUST] stops= 4 veh=van        traf=Heavy  mean_imp=282.02 std=441.25 min=  0.02 max=1455.88
+[ROBUST] stops= 7 veh=motorcycle traf=Low    mean_imp=625.71 std=468.83 min=  0.16 max=1453.89
+[ROBUST] stops= 7 veh=motorcycle traf=Normal mean_imp=625.84 std=468.89 min=  0.18 max=1454.10
+[ROBUST] stops= 7 veh=motorcycle traf=Medium mean_imp=626.03 std=469.00 min=  0.20 max=1454.41
+[ROBUST] stops= 7 veh=motorcycle traf=Heavy  mean_imp=626.27 std=469.13 min=  0.24 max=1454.83
+[ROBUST] stops= 7 veh=scooter    traf=Low    mean_imp=625.93 std=468.95 min=  0.19 max=1454.26
+[ROBUST] stops= 7 veh=scooter    traf=Normal mean_imp=626.09 std=469.03 min=  0.21 max=1454.52
+[ROBUST] stops= 7 veh=scooter    traf=Medium mean_imp=626.31 std=469.16 min=  0.24 max=1454.89
+[ROBUST] stops= 7 veh=scooter    traf=Heavy  mean_imp=626.61 std=469.32 min=  0.28 max=1455.40
+[ROBUST] stops= 7 veh=van        traf=Low    mean_imp=626.27 std=469.13 min=  0.24 max=1454.83
+[ROBUST] stops= 7 veh=van        traf=Normal mean_imp=626.46 std=469.24 min=  0.26 max=1455.14
+[ROBUST] stops= 7 veh=van        traf=Medium mean_imp=626.74 std=469.39 min=  0.30 max=1455.62
+[ROBUST] stops= 7 veh=van        traf=Heavy  mean_imp=627.12 std=469.60 min=  0.35 max=1456.25
+[ROBUST] stops=10 veh=motorcycle traf=Low    mean_imp=1197.70 std=771.02 min=  0.61 max=2905.48
+[ROBUST] stops=10 veh=motorcycle traf=Normal mean_imp=1198.05 std=771.21 min=  0.68 max=2906.31
+[ROBUST] stops=10 veh=motorcycle traf=Medium mean_imp=1198.59 std=771.48 min=  0.78 max=2907.56
+[ROBUST] stops=10 veh=motorcycle traf=Heavy  mean_imp=1199.28 std=771.86 min=  0.91 max=2909.22
+[ROBUST] stops=10 veh=scooter    traf=Low    mean_imp=1198.33 std=771.36 min=  0.73 max=2906.98
+[ROBUST] stops=10 veh=scooter    traf=Normal mean_imp=1198.76 std=771.58 min=  0.81 max=2907.98
+[ROBUST] stops=10 veh=scooter    traf=Medium mean_imp=1199.38 std=771.91 min=  0.93 max=2909.47
+[ROBUST] stops=10 veh=scooter    traf=Heavy  mean_imp=1200.21 std=772.37 min=  1.05 max=2911.47
+[ROBUST] stops=10 veh=van        traf=Low    mean_imp=1199.28 std=771.86 min=  0.91 max=2909.22
+[ROBUST] stops=10 veh=van        traf=Normal mean_imp=1199.80 std=772.14 min=  1.02 max=2910.47
+[ROBUST] stops=10 veh=van        traf=Medium mean_imp=1200.58 std=772.56 min=  1.12 max=2912.34
+[ROBUST] stops=10 veh=van        traf=Heavy  mean_imp=1201.59 std=773.17 min=  0.99 max=2914.84
+
+--- 2. ALNS explanation (penalty breakdown) ---
+
+=== 🚦 REAL-TIME TRAFFIC REOPTIMIZATION — PURE CASE ===
+
+=== BASELINE (normal traffic) ===
+HTTP status: 200
+{'rerouted': False}
+
+=== LIVE INCIDENT (traffic jam) ===
+HTTP status: 200
+{'cost': 31.65,
+ 'incident_kind': 'traffic_jam',
+ 'live_incidents_found': False,
+ 'optimized_route': [{'is_fragile': False,
+                      'lat': 0.01,
+                      'lng': 0.0,
+                      'window_end': 1320,
+                      'window_start': 480},
+                     {'is_fragile': False,
+                      'lat': 0.02,
+                      'lng': 0.01,
+                      'window_end': 1320,
+                      'window_start': 480},
+                     {'is_fragile': False,
+                      'lat': 0.06,
+                      'lng': 0.0,
+                      'window_end': 1320,
+                      'window_start': 480}],
+ 'reason': 'traffic_jam',
+ 'rerouted': True}
+
+=== ✅ COMPARISON SUMMARY ===
+Baseline rerouted : False
+Incident rerouted : True
+
+🔥 REAL-TIME REOPTIMIZATION CONFIRMED
+Baseline route : unchanged
+Incident route : [{'lat': 0.01, 'lng': 0.0, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}, {'lat': 0.02, 'lng': 0.01, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}, {'lat': 0.06, 'lng': 0.0, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}]
+Incident cost  : 31.65
+
+INTERPRETATION:
+- Same route submitted twice
+- Only traffic conditions changed
+- Long-distance leg becomes expensive under congestion
+- Optimizer reorders stops in response
+- rerouted=True proves real-time decision making
+- No fragility or time-window tricks involved
+
+
+--- 3. Reoptimize API (traffic incident simulation) ---
+
+=== 🚦 REAL-TIME TRAFFIC REOPTIMIZATION — PURE CASE ===
+
+=== BASELINE (normal traffic) ===
+HTTP status: 200
+{'rerouted': False}
+
+=== LIVE INCIDENT (traffic jam) ===
+HTTP status: 200
+{'cost': 31.65,
+ 'incident_kind': 'traffic_jam',
+ 'live_incidents_found': False,
+ 'optimized_route': [{'is_fragile': False,
+                      'lat': 0.01,
+                      'lng': 0.0,
+                      'window_end': 1320,
+                      'window_start': 480},
+                     {'is_fragile': False,
+                      'lat': 0.02,
+                      'lng': 0.01,
+                      'window_end': 1320,
+                      'window_start': 480},
+                     {'is_fragile': False,
+                      'lat': 0.06,
+                      'lng': 0.0,
+                      'window_end': 1320,
+                      'window_start': 480}],
+ 'reason': 'traffic_jam',
+ 'rerouted': True}
+
+=== ✅ COMPARISON SUMMARY ===
+Baseline rerouted : False
+Incident rerouted : True
+
+🔥 REAL-TIME REOPTIMIZATION CONFIRMED
+Baseline route : unchanged
+Incident route : [{'lat': 0.01, 'lng': 0.0, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}, {'lat': 0.02, 'lng': 0.01, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}, {'lat': 0.06, 'lng': 0.0, 'is_fragile': False, 'window_start': 480, 'window_end': 1320}]
+Incident cost  : 31.65
+
+INTERPRETATION:
+- Same route submitted twice
+- Only traffic conditions changed
+- Long-distance leg becomes expensive under congestion
+- Optimizer reorders stops in response
+- rerouted=True proves real-time decision making
+- No fragility or time-window tricks involved
+
+
+=== Done. Statistics saved to committee_stats.txt ===
