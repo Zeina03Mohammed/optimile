@@ -11,10 +11,14 @@ class Env {
   // • Real iPhone (same Wi‑Fi as Mac): 'http://YOUR_MAC_IP:8000' (e.g. 192.168.1.x)
   // • Android emulator: 'http://10.0.2.2:8000'
   // If backend unreachable, Simulate button uses offline demo.
-  static const backendBaseUrl = 'http://192.168.1.50:8000';
+  static const backendBaseUrl = 'http://192.168.1.13:8000';
 
   // Directions API URL
   static const directionsApiUrl =
       'https://maps.googleapis.com/maps/api/directions/json';
+
+  // OpenWeatherMap API key — required for live weather readings.
+  static const openWeatherApiKey = '601475e7a589300b7d822f2e51d86f88';
+
 }
 

@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../env.dart';
+import '../models/weather_data.dart';
+import '../models/road_incident.dart';
 import '../services/places_service.dart';
 import '../services/firestore_service.dart';
+import '../services/weather_service.dart';
+import '../services/road_hazard_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/stop_model.dart';
@@ -13,6 +17,11 @@ class MapVM extends ChangeNotifier {
   // ================= SERVICES =================
   final PlacesService _placesService = PlacesService();
   PlacesService get placesService => _placesService;
+  final WeatherService _weatherService = WeatherService();
+  final RoadHazardService _roadHazardService = RoadHazardService();
+  WeatherData? weatherData;
+  List<RoadIncident> roadIncidents = [];
+  Timer? _weatherTimer;
 
   final FirestoreService firestoreService = FirestoreService();
 String vehicleType = "van";
@@ -24,6 +33,8 @@ bool isFragile = false;
   LatLng? _simulatedVehicle2Pos;
   /// True when a fleet transfer has happened during this ride.
   bool fleetTransferOccurred = false;
+  String get weatherForBackend => weatherData?.backendCondition ?? "Sunny";
+  double get weatherRoadRisk   => weatherData?.roadRisk ?? 0.0;
   // ================= MAP =================
   GoogleMapController? mapController;
   LatLng? currentLocation;
@@ -152,7 +163,145 @@ bool isFragile = false;
     positionStream?.cancel();
     _deviationTimer?.cancel();
     _trafficTimer?.cancel();
+    _weatherTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> refreshWeather({bool force = false}) async {
+    if (currentLocation == null) return;
+    final previous = weatherData?.backendCondition;
+    final snapshot = await _weatherService.fetchCurrent(
+      currentLocation!.latitude,
+      currentLocation!.longitude,
+      force: force,
+    );
+    if (snapshot == null) return;
+
+    weatherData = snapshot;
+
+    // Check real road incidents whenever conditions are bad enough to matter
+    if (snapshot.severity >= RoadHazardService.minSeverityToCheck) {
+      await _checkRoadHazards();
+    } else {
+      roadIncidents = [];
+    }
+
+    notifyListeners();
+
+    if (navigationStarted &&
+        previous != null &&
+        previous != snapshot.backendCondition &&
+        !_isReoptimizing) {
+      addEvent("🌦", "Weather changed to ${snapshot.condition} — re-optimizing");
+      unawaited(
+        reoptimizeRoute(
+          reason: "weather_change",
+          severity: snapshot.severity,
+          affectedStopIndex: currentStopIndex,
+          useBellmanFord: true,
+        ),
+      );
+    }
+  }
+
+  Future<void> _checkRoadHazards() async {
+    if (currentLocation == null) return;
+    final routePoints = stops.map((s) => s.location).toList();
+    final incidents = await _roadHazardService.fetchIncidents(
+      currentLocation: currentLocation!,
+      stops: routePoints,
+    );
+    roadIncidents = incidents;
+
+    // ── Log each incident with road-class-aware detail ──────────────────────
+    for (final inc in incidents) {
+      final hazardIcon = _hazardIcon(inc.type);
+      final classIcon  = inc.roadClass.icon;      // 🛣️ / 🚗 / 🛤️
+      final classLabel = inc.roadClass.label;     // Highway / Main road / Side road
+      final road       = inc.fromRoad.isNotEmpty ? inc.fromRoad : 'route';
+      final pct        = (inc.hazardScore * 100).toStringAsFixed(0);
+      addEvent(
+        '$hazardIcon$classIcon',
+        '${inc.type} · $classLabel "$road" — $pct% risk',
+      );
+    }
+
+    if (!navigationStarted || _isReoptimizing || incidents.isEmpty) return;
+
+    // ── Per road-class re-routing thresholds ────────────────────────────────
+    //
+    // Different road types flood / become dangerous at different severity levels:
+    //
+    //   Side roads   → reroute threshold 0.40
+    //     Small streets flood quickly and have no drainage;
+    //     even moderate rain makes them risky.
+    //
+    //   Tunnels      → reroute threshold 0.45
+    //     Tunnels accumulate water fast and offer no escape —
+    //     triggered slightly above side roads.
+    //
+    //   Main roads   → reroute threshold 0.60
+    //     Arterials have better drainage but heavy rain still floods them.
+    //
+    //   Highways     → reroute threshold 0.50
+    //     Higher speed makes any hazard more dangerous; threshold is lower
+    //     than main roads because consequences of getting it wrong are worse.
+    //
+    RoadIncident? triggerIncident;
+    double        triggerSeverity = 0;
+
+    for (final inc in incidents) {
+      final threshold = switch (inc.roadClass) {
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
+        RoadClass.mainRoad => 0.60,
+        RoadClass.highway  => 0.50,
+        RoadClass.unknown  => 0.65,
+      };
+
+      if (inc.hazardScore >= threshold &&
+          inc.hazardScore > triggerSeverity) {
+        triggerIncident = inc;
+        triggerSeverity = inc.hazardScore;
+      }
+    }
+
+    if (triggerIncident == null) return;
+
+    final classLabel = triggerIncident.roadClass.label;
+    final road       = triggerIncident.fromRoad.isNotEmpty
+        ? triggerIncident.fromRoad
+        : 'route';
+    addEvent(
+      '🔁',
+      '$classLabel "$road" hazard (${triggerIncident.type}) — re-routing to safer path',
+    );
+
+    unawaited(
+      reoptimizeRoute(
+        reason: 'road_hazard',
+        severity: triggerSeverity,
+        affectedStopIndex: currentStopIndex,
+        useBellmanFord: true,
+      ),
+    );
+  }
+
+  static String _hazardIcon(String type) => switch (type) {
+    'Flood-prone road'      => '🌊',
+    'Ford / water crossing' => '🌊',
+    'Tunnel'                => '🚇',
+    'Muddy surface'         => '🟫',
+    'Sandy surface'         => '🏜️',
+    'Gravel surface'        => '🪨',
+    'Unpaved road'          => '🛤️',
+    _                       => '⚠️',
+  };
+
+  void _ensureWeatherTimer() {
+    _weatherTimer ??= Timer.periodic(
+      const Duration(minutes: 15),
+      (_) => unawaited(refreshWeather()),
+    );
   }
 
   // ================= SEARCH =================
@@ -240,6 +389,8 @@ void setUseBellmanFord(bool value) {
       CameraUpdate.newLatLngZoom(currentLocation!, 15),
     );
 
+    await refreshWeather(force: true);
+    _ensureWeatherTimer();
     notifyListeners();
   }
 
@@ -367,7 +518,8 @@ void addStop(
         "stops": routeStops.map((s) => s.toPayload()).toList(),
         "vehicle": vehicleType,
         "traffic": "Medium",
-        "weather": "Sunny",
+        "weather": weatherForBackend,
+        "road_risk": weatherRoadRisk,
         "start_time": startMinutes,
         "use_bellman_ford": false,
       };
@@ -781,7 +933,8 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
           stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
       "vehicle": vehicleType,
       "traffic": "Heavy",
-      "weather": "Sunny",
+      "weather": weatherForBackend,
+      "road_risk": weatherRoadRisk,
       "reason": "traffic_jam",
       "severity": 0.5,
       "simulate": true,
@@ -973,6 +1126,225 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
     }
   }
 
+  // ================= ROAD HAZARD SIMULATION =================
+  Future<void> simulateRoadHazard(BuildContext context) async {
+    if (!navigationStarted || stops.isEmpty) return;
+
+    _isReoptimizing = true;
+    notifyListeners();
+
+    // ── 1. Build incidents that cover all three road classes ─────────────────
+    //   This lets the demo show exactly how each class triggers differently:
+    //
+    //   🛣️  Highway     → flooded underpass, score 0.92 → threshold 0.50 → TRIGGERS
+    //   🚗  Main road   → flood-prone stretch, score 0.75 → threshold 0.60 → TRIGGERS
+    //   🛤️  Side road   → waterlogged unpaved lane, score 0.38 → threshold 0.40 → SKIPPED
+    //   🚇  Tunnel      → tunnel flooding, score 0.65 → threshold 0.45 → TRIGGERS
+    //
+    final remaining = stops.skip(currentStopIndex).toList();
+    final fakeIncidents = <RoadIncident>[];
+
+    LatLng midpoint(LatLng a, LatLng b) =>
+        LatLng((a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2);
+
+    final base = currentLocation!;
+
+    // Highway flood — most critical, triggers first
+    fakeIncidents.add(RoadIncident(
+      lat: base.latitude  + 0.003,
+      lon: base.longitude + 0.003,
+      type: 'Flood-prone road',
+      description: 'Highway — flooded underpass, water level rising',
+      hazardScore: 0.92,
+      delaySeconds: 600,
+      fromRoad: 'Highway (simulated)',
+      toRoad: '',
+      roadClass: RoadClass.highway,
+    ));
+
+    // Tunnel ahead — dangerous in any heavy rain
+    if (remaining.isNotEmpty) {
+      final mid = midpoint(base, remaining.first.location);
+      fakeIncidents.add(RoadIncident(
+        lat: mid.latitude,
+        lon: mid.longitude,
+        type: 'Tunnel',
+        description: 'Tunnel — accumulates water fast, risk of flooding',
+        hazardScore: 0.65,
+        delaySeconds: 360,
+        fromRoad: 'Tunnel ahead (simulated)',
+        toRoad: '',
+        roadClass: RoadClass.sideRoad, // tunnels live on side/local roads here
+      ));
+    }
+
+    // Main road flood-prone stretch
+    if (remaining.length >= 2) {
+      final mid = midpoint(remaining[0].location, remaining[1].location);
+      fakeIncidents.add(RoadIncident(
+        lat: mid.latitude,
+        lon: mid.longitude,
+        type: 'Flood-prone road',
+        description: 'Main road — historically floods in heavy rain',
+        hazardScore: 0.75,
+        delaySeconds: 480,
+        fromRoad: 'Main road (simulated)',
+        toRoad: '',
+        roadClass: RoadClass.mainRoad,
+      ));
+    }
+
+    // Side road — waterlogged, unpaved lane (below threshold, shown but not rerouted)
+    if (remaining.length >= 2) {
+      fakeIncidents.add(RoadIncident(
+        lat: base.latitude  - 0.002,
+        lon: base.longitude - 0.002,
+        type: 'Unpaved road',
+        description: 'Side road — dirt lane, impassable when wet (below reroute threshold)',
+        hazardScore: 0.38,
+        delaySeconds: 120,
+        fromRoad: 'Side road (simulated)',
+        toRoad: '',
+        roadClass: RoadClass.sideRoad,
+      ));
+    }
+
+    roadIncidents = fakeIncidents;
+
+    // ── 2. Log all incidents with road-class icons ───────────────────────────
+    for (final inc in fakeIncidents) {
+      final hazardIcon = _hazardIcon(inc.type);
+      final classIcon  = inc.roadClass.icon;
+      final classLabel = inc.roadClass.label;
+      final pct        = (inc.hazardScore * 100).toStringAsFixed(0);
+      final threshold  = switch (inc.roadClass) {
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
+        RoadClass.mainRoad => 0.60,
+        RoadClass.highway  => 0.50,
+        RoadClass.unknown  => 0.65,
+      };
+      final willReroute = inc.hazardScore >= threshold;
+      addEvent(
+        '$hazardIcon$classIcon',
+        'SIM · $classLabel "${inc.fromRoad}" — $pct% risk'
+        '${willReroute ? " → REROUTING" : " → monitor only"}',
+      );
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🌊 Road hazards injected across road types — re-optimizing…'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+
+    // ── 3. Measure baseline ETA ─────────────────────────────────────────────
+    double before = 0;
+    LatLng origin = currentLocation!;
+    for (final stop in remaining) {
+      final r = await _placesService.getDirections(origin, stop.location);
+      if (r == null) break;
+      before += r['legs'][0]['duration']['value'] / 60.0;
+      origin = stop.location;
+    }
+
+    // ── 4. Call backend — only pass incidents that cross their road-class threshold
+    final triggeringIncidents = fakeIncidents.where((inc) {
+      final threshold = switch (inc.roadClass) {
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
+        RoadClass.mainRoad => 0.60,
+        RoadClass.highway  => 0.50,
+        RoadClass.unknown  => 0.65,
+      };
+      return inc.hazardScore >= threshold;
+    }).toList();
+
+    final worstScore = triggeringIncidents.isEmpty
+        ? 0.5
+        : triggeringIncidents
+            .map((i) => i.hazardScore)
+            .reduce((a, b) => a > b ? a : b);
+
+    final payload = {
+      'current_lat': currentLocation!.latitude,
+      'current_lng': currentLocation!.longitude,
+      'remaining_stops': remaining.map((s) => s.toPayload()).toList(),
+      'vehicle': vehicleType,
+      'traffic': 'Heavy',
+      'weather': weatherForBackend,
+      'road_risk': worstScore,
+      'road_incidents': triggeringIncidents.map((i) => {
+        'type': i.type,
+        'lat': i.lat,
+        'lon': i.lon,
+        'hazard_score': i.hazardScore,
+        'delay_seconds': i.delaySeconds,
+        'from': i.fromRoad,
+        'to': i.toRoad,
+      }).toList(),
+      'reason': 'road_hazard',
+      'severity': worstScore,
+      'simulate': true,
+      'use_bellman_ford': true,
+      'google_maps_api_key': Env.googleMapsApiKey,
+    };
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${Env.backendBaseUrl}/reoptimize'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        if (body['rerouted'] == true) {
+          final newStops = _parseOptimizedRoute(body['optimized_route'] as List);
+          final after = await _measureEtaFromStops(newStops);
+          final saved = (before - (after ?? before))
+              .clamp(0.0, 999.0)
+              .toStringAsFixed(1);
+
+          _routes[_activeRouteIndex].stops
+            ..removeRange(currentStopIndex, _routes[_activeRouteIndex].stops.length)
+            ..addAll(newStops);
+          await rebuildMap();
+
+          addEvent('✅', 'Road hazard re-route applied — saved ~$saved min');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Route updated — avoiding hazards, saved ~$saved min'),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+        } else {
+          addEvent('ℹ️', 'No better route found around hazards');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No better route found around hazards')),
+            );
+          }
+        }
+      } else {
+        // Backend unreachable — offline demo
+        addEvent('🔁', 'Backend unreachable — applying offline hazard demo');
+        if (context.mounted) await _runOfflineDemoReroute(context);
+      }
+    } catch (_) {
+      addEvent('🔁', 'Backend unreachable — applying offline hazard demo');
+      if (context.mounted) await _runOfflineDemoReroute(context);
+    } finally {
+      _isReoptimizing = false;
+      notifyListeners();
+    }
+  }
+
   // ================= MONITORS =================
 void startDeviationMonitor(BuildContext context) {
   _deviationTimer?.cancel();
@@ -1087,7 +1459,8 @@ void startTrafficMonitor(BuildContext context) {
                 stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
             "vehicle": vehicleType,
             "traffic": "Heavy",
-            "weather": "Sunny",
+            "weather": weatherForBackend,
+            "road_risk": weatherRoadRisk,
             "reason": "traffic_jam",
             "severity": ratio,
             "simulate": false,
@@ -1120,7 +1493,7 @@ void startTrafficMonitor(BuildContext context) {
             final b = jsonDecode(responseAlns.body) as Map<String, dynamic>;
             if (b["rerouted"] == true && b["optimized_route"] != null) {
               routeAlns = _parseOptimizedRoute(b["optimized_route"] as List);
-              etaAlns = await _measureEtaFromStops(routeAlns!);
+              etaAlns = await _measureEtaFromStops(routeAlns);
             }
           }
 
@@ -1130,7 +1503,7 @@ void startTrafficMonitor(BuildContext context) {
             final b = jsonDecode(responseBf.body) as Map<String, dynamic>;
             if (b["rerouted"] == true && b["optimized_route"] != null) {
               routeBf = _parseOptimizedRoute(b["optimized_route"] as List);
-              etaBf = await _measureEtaFromStops(routeBf!);
+              etaBf = await _measureEtaFromStops(routeBf);
             }
           }
 
@@ -1169,7 +1542,7 @@ void startTrafficMonitor(BuildContext context) {
           if (toApply != null) {
             final after = toApply == routeAlns ? (etaAlns ?? 0) : (etaBf ?? 0);
             // Migrate stopTitles
-            for (final s in stops) stopTitles.remove(s);
+            for (final s in stops) { stopTitles.remove(s); }
             stops
               ..clear()
               ..addAll(toApply);
@@ -1192,7 +1565,7 @@ void startTrafficMonitor(BuildContext context) {
           if (hasOtherVehicle) {
             _isReoptimizing = false;
             addEvent("🔄", "Checking fleet — rerouted path may overlap with other vehicles...");
-            await fleetReoptimize(context);
+            if (context.mounted) await fleetReoptimize(context);
           }
         }
       } catch (e) {
@@ -1237,7 +1610,17 @@ Future<bool> reoptimizeRoute({
           stops.skip(currentStopIndex).map((s) => s.toPayload()).toList(),
       "vehicle": vehicleType,
       "traffic": "Heavy",
-      "weather": "Sunny",
+      "weather": weatherForBackend,
+      "road_risk": weatherRoadRisk,
+      "road_incidents": roadIncidents.map((i) => {
+        "type": i.type,
+        "lat": i.lat,
+        "lon": i.lon,
+        "hazard_score": i.hazardScore,
+        "delay_seconds": i.delaySeconds,
+        "from": i.fromRoad,
+        "to": i.toRoad,
+      }).toList(),
       "reason": reason,
       "severity": severity,
       "use_bellman_ford": useBellmanFord,
@@ -1349,7 +1732,7 @@ Future<bool> reoptimizeRoute({
       }
     }
 
-    for (final s in stops) stopTitles.remove(s);
+    for (final s in stops) { stopTitles.remove(s); }
     stops
       ..clear()
       ..addAll(optimizedStops);
@@ -1428,7 +1811,8 @@ Future<void> fleetReoptimize(BuildContext context) async {
         "remaining_stops": remainingStops.map((s) => s.toPayload()).toList(),
         "vehicle": vehicleType,
         "traffic": isActive ? "Heavy" : "Normal",
-        "weather": "Sunny",
+        "weather": weatherForBackend,
+        "road_risk": weatherRoadRisk,
       });
     }
 

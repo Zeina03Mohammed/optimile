@@ -130,6 +130,14 @@ class _MapView extends StatelessWidget {
               ),
             ),
 
+          // ========== WEATHER CHIP ==========
+          if (vm.weatherData != null && !vm.showSearchBar)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              right: 60,
+              child: _WeatherChip(vm: vm),
+            ),
+
           // ========== EVENT LOG (during navigation) ==========
           if (vm.navigationStarted && vm.eventLog.isNotEmpty)
             Positioned(
@@ -662,6 +670,25 @@ class _MapView extends StatelessWidget {
                   ),
           ),
 
+          if (vm.navigationStarted) ...[
+            const Divider(color: Colors.grey),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(44),
+                ),
+                icon: const Icon(Icons.water_damage, size: 18),
+                label: const Text('Simulate Road Hazard'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  vm.simulateRoadHazard(context);
+                },
+              ),
+            ),
+          ],
           const Divider(color: Colors.grey),
           // LOGOUT
           ListTile(
@@ -683,4 +710,94 @@ class _MapView extends StatelessWidget {
   );
 }
 
+}
+
+// ========== WEATHER CHIP WIDGET ==========
+class _WeatherChip extends StatelessWidget {
+  const _WeatherChip({required this.vm});
+  final MapVM vm;
+
+  static IconData _iconFor(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('storm') || c.contains('thunder')) return Icons.thunderstorm;
+    if (c.contains('snow')) return Icons.ac_unit;
+    if (c.contains('fog') || c.contains('haze')) return Icons.foggy;
+    if (c.contains('rain') || c.contains('drizzle')) return Icons.umbrella;
+    if (c.contains('cloud')) return Icons.cloud;
+    if (c.contains('night')) return Icons.nightlight_round;
+    return Icons.wb_sunny;
+  }
+
+  static Color _colorFor(String condition) {
+    final c = condition.toLowerCase();
+    if (c.contains('storm') || c.contains('thunder')) return Colors.deepPurple.shade700;
+    if (c.contains('snow')) return Colors.lightBlue.shade200;
+    if (c.contains('fog') || c.contains('haze')) return Colors.blueGrey.shade400;
+    if (c.contains('rain') || c.contains('drizzle')) return Colors.indigo.shade400;
+    if (c.contains('cloud')) return Colors.blueGrey.shade600;
+    if (c.contains('night')) return Colors.indigo.shade900;
+    return Colors.orange.shade600;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = vm.weatherData!;
+    final icon = _iconFor(w.condition);
+    final color = _colorFor(w.condition);
+
+    return GestureDetector(
+      onTap: () => vm.refreshWeather(force: true),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 5),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "${w.tempC.toStringAsFixed(1)}°C",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  w.condition,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey.shade600,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  "💨 ${w.windSpeedKmh.toStringAsFixed(0)} km/h · 💧${w.humidity}%",
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.grey.shade500,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
