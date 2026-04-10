@@ -94,6 +94,39 @@ bool isFragile = false;
     notifyListeners();
   }
 
+  String _severityBand(double severity) {
+    if (severity >= 0.75) return "critical";
+    if (severity >= 0.45) return "high";
+    if (severity >= 0.20) return "moderate";
+    return "low";
+  }
+
+  String _methodLabel(String method) {
+    final m = method.toLowerCase();
+    if (m.contains("alns") && m.contains("bellman")) return "smart rerouting";
+    if (m.contains("alns")) return "smart rerouting";
+    if (m.contains("fleet")) return "fleet balancing";
+    if (m.contains("direction")) return "live map data";
+    if (m.contains("fallback")) return "offline mode";
+    if (m.contains("solver")) return "best option check";
+    return "route logic";
+  }
+
+  String _xaiEvent({
+    required String trigger,
+    required String evidence,
+    required String decision,
+    required String method,
+    String? outcome,
+    double? severity,
+  }) {
+    final level = severity == null ? null : _severityBand(severity);
+    final riskText = level == null ? "" : "Risk: $level. ";
+    final actionText = "Action: $decision (${_methodLabel(method)}).";
+    final resultText = outcome == null ? "" : " Result: $outcome.";
+    return "${riskText}Why: $trigger ($evidence). $actionText$resultText";
+  }
+
   void toggleEventLog() {
     eventLogExpanded = !eventLogExpanded;
     notifyListeners();
@@ -155,7 +188,15 @@ bool isFragile = false;
     }
     final mins = totalSec / 60;
     activeVehicleEta = '${mins.toStringAsFixed(1)} min';
-    addEvent("⏱", "${_routes[_activeRouteIndex].name} ETA: $activeVehicleEta");
+    addEvent(
+      "⏱",
+      _xaiEvent(
+        trigger: "eta update",
+        evidence: "${_routes[_activeRouteIndex].name} $activeVehicleEta",
+        decision: "display eta",
+        method: "directions",
+      ),
+    );
   }
 
   @override
@@ -192,7 +233,17 @@ bool isFragile = false;
         previous != null &&
         previous != snapshot.backendCondition &&
         !_isReoptimizing) {
-      addEvent("🌦", "Weather changed to ${snapshot.condition} — re-optimizing");
+      addEvent(
+        "🌦",
+        _xaiEvent(
+          trigger: "weather shift",
+          evidence:
+              "${snapshot.condition}, risk ${snapshot.roadRisk.toStringAsFixed(2)}",
+          decision: "re-optimize remaining stops",
+          method: "ALNS + Bellman-Ford",
+          severity: snapshot.severity,
+        ),
+      );
       unawaited(
         reoptimizeRoute(
           reason: "weather_change",
@@ -222,7 +273,13 @@ bool isFragile = false;
       final pct        = (inc.hazardScore * 100).toStringAsFixed(0);
       addEvent(
         '$hazardIcon$classIcon',
-        '${inc.type} · $classLabel "$road" — $pct% risk',
+        _xaiEvent(
+          trigger: "hazard scan",
+          evidence: '$classLabel "$road" $pct%',
+          decision: "monitor",
+          method: inc.type,
+          severity: inc.hazardScore,
+        ),
       );
     }
 
@@ -273,7 +330,14 @@ bool isFragile = false;
         : 'route';
     addEvent(
       '🔁',
-      '$classLabel "$road" hazard (${triggerIncident.type}) — re-routing to safer path',
+      _xaiEvent(
+        trigger: "$classLabel hazard",
+        evidence:
+            '$road: ${triggerIncident.type}, score ${triggerIncident.hazardScore.toStringAsFixed(2)}',
+        decision: "avoid risky segment and reroute",
+        method: "ALNS + Bellman-Ford",
+        severity: triggerIncident.hazardScore,
+      ),
     );
 
     unawaited(
@@ -568,7 +632,15 @@ void addStop(
           if (s.title != null && s.title!.isNotEmpty) stopTitles[s] = s.title!;
         }
         optimizedCount++;
-        addEvent("✓", "Route optimized (ALNS) — saved ${improvement.toStringAsFixed(1)} min");
+        addEvent(
+          "✓",
+          _xaiEvent(
+            trigger: "initial optimize",
+            evidence: "eta -${improvement.toStringAsFixed(1)}m",
+            decision: "apply new order",
+            method: "ALNS",
+          ),
+        );
       }
     }
 
@@ -743,7 +815,15 @@ void addStop(
     final fleetInfo = _routes.length > 1
         ? " (fleet: ${_routes.length} vehicles)"
         : "";
-    addEvent("▶", "Navigation started — driving ${_routes[_activeRouteIndex].name} with ${stops.length} stops$fleetInfo");
+    addEvent(
+      "▶",
+      _xaiEvent(
+        trigger: "ride start",
+        evidence: "${_routes[_activeRouteIndex].name}, ${stops.length} stops$fleetInfo",
+        decision: "start monitoring",
+        method: "live control",
+      ),
+    );
 
     // Compute and display per-vehicle ETA for the chosen car
     _updateStopProgress();
@@ -755,7 +835,15 @@ void addStop(
     final hasOtherVehicle = _routes.length >= 2 &&
         _routes.any((r) => r != _routes[_activeRouteIndex] && r.stops.isNotEmpty);
     if (hasOtherVehicle) {
-      addEvent("🔄", "Initial fleet check — balancing stops across vehicles...");
+      addEvent(
+        "🔄",
+        _xaiEvent(
+          trigger: "fleet pre-check",
+          evidence: "${_routes.length} active vehicles",
+          decision: "evaluate transfers",
+          method: "fleet optimizer",
+        ),
+      );
       await fleetReoptimize(context);
     }
 
@@ -791,14 +879,38 @@ void addStop(
 
       if (distanceToStop < 30) {
         _plannedRoutePoints.clear();
-        addEvent("📍", "Stop ${currentStopIndex + 1} reached");
+        addEvent(
+          "📍",
+          _xaiEvent(
+            trigger: "stop reached",
+            evidence: "stop ${currentStopIndex + 1}/${stops.length}",
+            decision: "advance route state",
+            method: "gps proximity",
+          ),
+        );
 
         if (currentStopIndex < stops.length - 1) {
           currentStopIndex++;
           _updateStopProgress();
-          addEvent("→", "Heading to stop ${currentStopIndex + 1} of ${stops.length}");
+          addEvent(
+            "→",
+            _xaiEvent(
+              trigger: "next leg",
+              evidence: "target ${currentStopIndex + 1}/${stops.length}",
+              decision: "navigate next stop",
+              method: "sequence engine",
+            ),
+          );
         } else {
-          addEvent("🏁", "All stops delivered!");
+          addEvent(
+            "🏁",
+            _xaiEvent(
+              trigger: "route complete",
+              evidence: "${stops.length}/${stops.length} stops served",
+              decision: "close ride",
+              method: "delivery flow",
+            ),
+          );
           await stopRide(context: context, completed: true);
           return;
         }
@@ -918,11 +1030,30 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
     _isReoptimizing = true;
     _lastReoptTime = DateTime.now();
 
-    addEvent("🔧", "Simulating traffic incident — ALNS vs ALNS+BF...");
+    addEvent(
+      "🔧",
+      _xaiEvent(
+        trigger: "simulated traffic disruption",
+        evidence: "same stops, same incident, dual-solver comparison",
+        decision: "pick lower-ETA candidate",
+        method: "ALNS vs ALNS + Bellman-Ford",
+        severity: 0.5,
+      ),
+    );
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("🔧 Simulating: ALNS vs ALNS+BF on same incident…")),
+        SnackBar(
+          content: Text(
+            _xaiEvent(
+              trigger: "simulation",
+              evidence: "same incident, dual solver",
+              decision: "compare candidates",
+              method: "ALNS vs ALNS+BF",
+              severity: 0.5,
+            ),
+          ),
+        ),
       );
     }
 
@@ -1033,9 +1164,30 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
         await rebuildMap();
         final saved = before - after;
         if (saved > 0) {
-          addEvent("✓", "$appliedAlgo reroute — saved ${saved.toStringAsFixed(1)} min");
+          addEvent(
+            "✓",
+            _xaiEvent(
+              trigger: "traffic incident response",
+              evidence: "baseline ${before.toStringAsFixed(1)} min vs optimized ${after.toStringAsFixed(1)} min",
+              decision: "apply $appliedAlgo candidate",
+              method: "deterministic ETA comparison (no ML)",
+              outcome: "saved ${saved.toStringAsFixed(1)} min",
+              severity: 0.5,
+            ),
+          );
         } else {
-          addEvent("—", "$appliedAlgo: no improvement over current route");
+          addEvent(
+            "—",
+            _xaiEvent(
+              trigger: "traffic incident response",
+              evidence:
+                  "optimized ETA ${after.toStringAsFixed(1)} min is not better than baseline ${before.toStringAsFixed(1)} min",
+              decision: "keep current sequence",
+              method: "$appliedAlgo evaluation",
+              outcome: "no ETA gain",
+              severity: 0.5,
+            ),
+          );
         }
         if (context.mounted) {
           final extra = after < before
@@ -1051,7 +1203,15 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
             _routes.any((r) => r != _routes[_activeRouteIndex] && r.stops.isNotEmpty);
         if (hasOtherVehicle) {
           _isReoptimizing = false;
-          addEvent("🔄", "Checking fleet — rerouted path may overlap with other vehicles...");
+          addEvent(
+            "🔄",
+            _xaiEvent(
+              trigger: "post-reroute fleet check",
+              evidence: "possible path overlap",
+              decision: "evaluate transfers",
+              method: "fleet optimizer",
+            ),
+          );
           await fleetReoptimize(context);
         }
       } else if (context.mounted) {
@@ -1210,6 +1370,9 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
     }
 
     roadIncidents = fakeIncidents;
+    final simWorstScore = fakeIncidents
+        .map((i) => i.hazardScore)
+        .reduce((a, b) => a > b ? a : b);
 
     // ── 2. Log all incidents with road-class icons ───────────────────────────
     for (final inc in fakeIncidents) {
@@ -1226,16 +1389,29 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
       final willReroute = inc.hazardScore >= threshold;
       addEvent(
         '$hazardIcon$classIcon',
-        'SIM · $classLabel "${inc.fromRoad}" — $pct% risk'
-        '${willReroute ? " → REROUTING" : " → monitor only"}',
+        _xaiEvent(
+          trigger: "sim hazard",
+          evidence: '$classLabel "${inc.fromRoad}" $pct%',
+          decision: willReroute ? "reroute candidate" : "monitor",
+          method: inc.type,
+          severity: inc.hazardScore,
+        ),
       );
     }
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🌊 Road hazards injected across road types — re-optimizing…'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text(
+            _xaiEvent(
+              trigger: "sim hazard set",
+              evidence: "${fakeIncidents.length} incidents",
+              decision: "reoptimize",
+              method: "ALNS+Bellman-Ford",
+              severity: simWorstScore,
+            ),
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -1314,30 +1490,82 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
             ..addAll(newStops);
           await rebuildMap();
 
-          addEvent('✅', 'Road hazard re-route applied — saved ~$saved min');
+          addEvent(
+            '✅',
+            _xaiEvent(
+              trigger: "hazard reroute",
+              evidence: "eta -$saved m",
+              decision: "apply safer route",
+              method: "ALNS+Bellman-Ford",
+              severity: worstScore,
+            ),
+          );
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('✅ Route updated — avoiding hazards, saved ~$saved min'),
+                content: Text(
+                  _xaiEvent(
+                    trigger: "hazard reroute",
+                    evidence: "eta -$saved m",
+                    decision: "route updated",
+                    method: "ALNS+Bellman-Ford",
+                    severity: worstScore,
+                  ),
+                ),
                 duration: const Duration(seconds: 5),
               ),
             );
           }
         } else {
-          addEvent('ℹ️', 'No better route found around hazards');
+          addEvent(
+            'ℹ️',
+            _xaiEvent(
+              trigger: "hazard reroute",
+              evidence: "no lower ETA candidate",
+              decision: "keep current route",
+              method: "ALNS+Bellman-Ford",
+              severity: worstScore,
+            ),
+          );
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No better route found around hazards')),
+              SnackBar(
+                content: Text(
+                  _xaiEvent(
+                    trigger: "hazard reroute",
+                    evidence: "no lower ETA candidate",
+                    decision: "keep route",
+                    method: "ALNS+Bellman-Ford",
+                    severity: worstScore,
+                  ),
+                ),
+              ),
             );
           }
         }
       } else {
         // Backend unreachable — offline demo
-        addEvent('🔁', 'Backend unreachable — applying offline hazard demo');
+        addEvent(
+          '🔁',
+          _xaiEvent(
+            trigger: "backend fallback",
+            evidence: "reoptimize HTTP ${response.statusCode}",
+            decision: "run offline demo",
+            method: "local fallback",
+          ),
+        );
         if (context.mounted) await _runOfflineDemoReroute(context);
       }
     } catch (_) {
-      addEvent('🔁', 'Backend unreachable — applying offline hazard demo');
+      addEvent(
+        '🔁',
+        _xaiEvent(
+          trigger: "backend fallback",
+          evidence: "network exception",
+          decision: "run offline demo",
+          method: "local fallback",
+        ),
+      );
       if (context.mounted) await _runOfflineDemoReroute(context);
     } finally {
       _isReoptimizing = false;
@@ -1375,11 +1603,28 @@ void startDeviationMonitor(BuildContext context) {
       if (minDist > 40) {
         _isReoptimizing = true;
         _lastReoptTime = DateTime.now();
-        addEvent("⚠", "Off route detected (${minDist.toStringAsFixed(0)}m) — re-optimizing...");
+        addEvent(
+          "⚠",
+          _xaiEvent(
+            trigger: "deviation",
+            evidence: "${minDist.toStringAsFixed(0)}m from path",
+            decision: "reoptimize remaining stops",
+            method: "ALNS",
+            severity: 1.0,
+          ),
+        );
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("⚠ Off route detected. Re-optimizing…"),
+          SnackBar(
+            content: Text(
+              _xaiEvent(
+                trigger: "deviation",
+                evidence: "${minDist.toStringAsFixed(0)}m off route",
+                decision: "reoptimize",
+                method: "ALNS",
+                severity: 1.0,
+              ),
+            ),
           ),
         );
 
@@ -1391,7 +1636,16 @@ void startDeviationMonitor(BuildContext context) {
         );
 
         if (success) {
-          addEvent("✓", "Route re-optimized after deviation");
+          addEvent(
+            "✓",
+            _xaiEvent(
+              trigger: "deviation handled",
+              evidence: "feasible reroute found",
+              decision: "apply updated route",
+              method: "ALNS",
+              severity: 1.0,
+            ),
+          );
         }
 
         _plannedRoutePoints.clear();
@@ -1437,14 +1691,43 @@ void startTrafficMonitor(BuildContext context) {
         final trafficVal = traffic ?? normal;
         final ratio = (trafficVal - normal) / normal;
 
-        addEvent("🔍", "Traffic check: ${(ratio * 100).toStringAsFixed(0)}% delay on next leg");
+        addEvent(
+          "🔍",
+          _xaiEvent(
+            trigger: "periodic traffic probe",
+            evidence:
+                "next-leg delay ${(ratio * 100).toStringAsFixed(0)}% (live vs free-flow)",
+            decision: "continue monitoring",
+            method: "Directions API delta",
+            severity: ratio,
+          ),
+        );
 
         if (ratio > 0.10) {
-          addEvent("🚦", "Heavy traffic (+${(ratio * 100).toStringAsFixed(0)}%) — comparing ALNS vs Bellman-Ford...");
+          addEvent(
+            "🚦",
+            _xaiEvent(
+              trigger: "delay threshold exceeded",
+              evidence: "+${(ratio * 100).toStringAsFixed(0)}% on active leg",
+              decision: "evaluate alternate route orders",
+              method: "ALNS vs ALNS + Bellman-Ford",
+              severity: ratio,
+            ),
+          );
 
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("🚦 Heavy traffic detected. Re-optimizing...")),
+              SnackBar(
+                content: Text(
+                  _xaiEvent(
+                    trigger: "traffic threshold",
+                    evidence: "+${(ratio * 100).toStringAsFixed(0)}%",
+                    decision: "reoptimize",
+                    method: "ALNS vs ALNS+BF",
+                    severity: ratio,
+                  ),
+                ),
+              ),
             );
           }
 
@@ -1521,7 +1804,17 @@ void startTrafficMonitor(BuildContext context) {
           List<Stop>? toApply;
           String appliedAlgo = "";
           if (routeAlns != null && routeBf != null && etaAlns != null && etaBf != null) {
-            addEvent("📊", "ALNS: ${etaAlns.toStringAsFixed(1)} min — Bellman-Ford: ${etaBf.toStringAsFixed(1)} min");
+            addEvent(
+              "📊",
+              _xaiEvent(
+                trigger: "dual-solver evaluation",
+                evidence:
+                    "ALNS ${etaAlns.toStringAsFixed(1)} min vs ALNS+BF ${etaBf.toStringAsFixed(1)} min",
+                decision: etaAlns <= etaBf ? "choose ALNS candidate" : "choose ALNS+BF candidate",
+                method: "lower ETA wins",
+                severity: ratio,
+              ),
+            );
             if (etaAlns <= etaBf) {
               toApply = routeAlns;
               appliedAlgo = "ALNS";
@@ -1530,11 +1823,29 @@ void startTrafficMonitor(BuildContext context) {
               appliedAlgo = "ALNS + Bellman-Ford";
             }
           } else if (routeAlns != null && etaAlns != null) {
-            addEvent("📊", "ALNS: ${etaAlns.toStringAsFixed(1)} min (Bellman-Ford unavailable)");
+            addEvent(
+              "📊",
+              _xaiEvent(
+                trigger: "solver comparison",
+                evidence: "ALNS ${etaAlns.toStringAsFixed(1)}m, BF unavailable",
+                decision: "use ALNS candidate",
+                method: "single-available solver",
+                severity: ratio,
+              ),
+            );
             toApply = routeAlns;
             appliedAlgo = "ALNS";
           } else if (routeBf != null && etaBf != null) {
-            addEvent("📊", "Bellman-Ford: ${etaBf.toStringAsFixed(1)} min (ALNS unavailable)");
+            addEvent(
+              "📊",
+              _xaiEvent(
+                trigger: "solver comparison",
+                evidence: "ALNS+BF ${etaBf.toStringAsFixed(1)}m, ALNS unavailable",
+                decision: "use ALNS+BF candidate",
+                method: "single-available solver",
+                severity: ratio,
+              ),
+            );
             toApply = routeBf;
             appliedAlgo = "ALNS + Bellman-Ford";
           }
@@ -1552,9 +1863,31 @@ void startTrafficMonitor(BuildContext context) {
             await rebuildMap();
             final saved = before - after;
             if (saved > 0) {
-              addEvent("✓", "Applied $appliedAlgo — saved ${saved.toStringAsFixed(1)} min");
+              addEvent(
+                "✓",
+                _xaiEvent(
+                  trigger: "traffic-aware reroute",
+                  evidence:
+                      "baseline ${before.toStringAsFixed(1)} min vs updated ${after.toStringAsFixed(1)} min",
+                  decision: "apply $appliedAlgo plan",
+                  method: "deterministic ETA objective",
+                  outcome: "saved ${saved.toStringAsFixed(1)} min",
+                  severity: ratio,
+                ),
+              );
             } else {
-              addEvent("✓", "Applied $appliedAlgo — route already optimal");
+              addEvent(
+                "✓",
+                _xaiEvent(
+                  trigger: "traffic-aware reroute",
+                  evidence:
+                      "candidate ETA ${after.toStringAsFixed(1)} min did not beat current plan",
+                  decision: "retain current effective order",
+                  method: "$appliedAlgo check",
+                  outcome: "already near-optimal",
+                  severity: ratio,
+                ),
+              );
             }
             activeVehicleEta = '${after.toStringAsFixed(1)} min';
           }
@@ -1564,7 +1897,15 @@ void startTrafficMonitor(BuildContext context) {
               _routes.any((r) => r != _routes[_activeRouteIndex] && r.stops.isNotEmpty);
           if (hasOtherVehicle) {
             _isReoptimizing = false;
-            addEvent("🔄", "Checking fleet — rerouted path may overlap with other vehicles...");
+            addEvent(
+              "🔄",
+              _xaiEvent(
+                trigger: "post-reroute fleet check",
+                evidence: "possible path overlap",
+                decision: "evaluate transfers",
+                method: "fleet optimizer",
+              ),
+            );
             if (context.mounted) await fleetReoptimize(context);
           }
         }
@@ -1768,7 +2109,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
   _isReoptimizing = true;
   _lastReoptTime = DateTime.now();
 
-  addEvent("🚛", "Fleet reoptimization — checking cross-vehicle transfers...");
+  addEvent(
+    "🚛",
+    _xaiEvent(
+      trigger: "fleet optimize",
+      evidence: "${_routes.length} vehicles",
+      decision: "evaluate stop transfer plan",
+      method: "fleet endpoint",
+      severity: 0.6,
+    ),
+  );
 
   try {
     // ---------- MEASURE ETA BEFORE (real Google Maps minutes) ----------
@@ -1832,7 +2182,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
         .timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
-      addEvent("✗", "Fleet reoptimize failed (HTTP ${response.statusCode})");
+      addEvent(
+        "✗",
+        _xaiEvent(
+          trigger: "fleet optimize",
+          evidence: "HTTP ${response.statusCode}",
+          decision: "skip transfer update",
+          method: "fleet endpoint",
+          severity: 0.6,
+        ),
+      );
       return;
     }
 
@@ -1842,7 +2201,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
     final vehicleRoutes = body["vehicle_routes"] as List?;
 
     if (!rerouted || transfers.isEmpty) {
-      addEvent("—", "Fleet check: no beneficial transfers found");
+      addEvent(
+        "—",
+        _xaiEvent(
+          trigger: "fleet optimize",
+          evidence: "0 beneficial transfers",
+          decision: "keep current assignment",
+          method: "fleet objective",
+          severity: 0.6,
+        ),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1929,7 +2297,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
         final key = '${sLat.toStringAsFixed(6)},${sLng.toStringAsFixed(6)}';
         stopLabel = coordToTitle[key] ?? "stop";
       }
-      addEvent("↔", "'$stopLabel' transferred: ${_routes[fromV].name} → ${_routes[toV].name}");
+      addEvent(
+        "↔",
+        _xaiEvent(
+          trigger: "fleet transfer",
+          evidence: "'$stopLabel' ${_routes[fromV].name}->${_routes[toV].name}",
+          decision: "reassign stop",
+          method: "fleet objective",
+          severity: 0.6,
+        ),
+      );
     }
 
     await rebuildMap();
@@ -1950,7 +2327,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
     final minutesSaved = etaBeforeMin - etaAfterMin;
     activeVehicleEta = '${etaAfterMin.toStringAsFixed(1)} min';
 
-    addEvent("✓", "Fleet reoptimized — ${transfers.length} transfer(s), saved ${minutesSaved.toStringAsFixed(1)} min");
+    addEvent(
+      "✓",
+      _xaiEvent(
+        trigger: "fleet optimize",
+        evidence: "${transfers.length} transfer(s), eta -${minutesSaved.toStringAsFixed(1)}m",
+        decision: "apply assignment",
+        method: "fleet objective",
+        severity: 0.6,
+      ),
+    );
 
     if (context.mounted) {
       final savedLabel = minutesSaved > 0
@@ -1967,7 +2353,16 @@ Future<void> fleetReoptimize(BuildContext context) async {
     }
   } catch (e) {
     debugPrint("Fleet reoptimize error: $e");
-    addEvent("✗", "Fleet reoptimize failed: $e");
+    addEvent(
+      "✗",
+      _xaiEvent(
+        trigger: "fleet optimize",
+        evidence: "exception",
+        decision: "keep current assignment",
+        method: "fleet endpoint",
+        severity: 0.6,
+      ),
+    );
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Fleet reoptimize error: $e")),

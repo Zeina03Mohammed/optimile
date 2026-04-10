@@ -10,8 +10,8 @@ class Env {
   // • iOS Simulator (app + backend on same Mac): 'http://127.0.0.1:8000'
   // • Real iPhone (same Wi‑Fi as Mac): 'http://YOUR_MAC_IP:8000' (e.g. 192.168.1.x)
   // • Android emulator: 'http://10.0.2.2:8000'
-  // If backend unreachable, Simulate button uses offline demo.
-  static const backendBaseUrl = 'http://192.168.1.13:8000';
+  // If backend unreachable, Simulate button uses offline demo.//'http://192.168.1.13:8000'
+  static const backendBaseUrl = 'http://10.0.2.2:8000';
 
   // Directions API URL
   static const directionsApiUrl =
