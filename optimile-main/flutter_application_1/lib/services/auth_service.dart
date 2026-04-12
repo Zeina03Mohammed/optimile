@@ -6,7 +6,7 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Login with email verification check
+  // ================= LOGIN =================
   Future<Map<String, dynamic>> login(String email, String password) async {
     if (email.isEmpty || password.isEmpty) {
       return {'error': 'Please enter email and password'};
@@ -18,26 +18,38 @@ class AuthService {
         password: password,
       );
 
-      // Check if email is verified
+      // ✅ Check email verification
       if (!userCred.user!.emailVerified) {
-        await _auth.signOut(); // Sign out unverified user
+        await _auth.signOut();
         return {
           'error': 'Please verify your email before logging in',
           'emailNotVerified': true,
         };
       }
 
+      // ✅ Get Firestore user document
       final userDoc =
           await _db.collection('users').doc(userCred.user!.uid).get();
 
       if (!userDoc.exists) {
-        return {'error': 'User profile not found'};
+        return {'error': 'User profile not found in database'};
       }
 
-      // Map Firestore data to DeliveryDriver
+      final data = userDoc.data();
+
+      // ✅ Safety checks (VERY IMPORTANT)
+      if (data == null) {
+        return {'error': 'User data is empty'};
+      }
+
+      if (!data.containsKey('role')) {
+        return {'error': 'User role not found'};
+      }
+
+      // ✅ Safe mapping
       final driver = DeliveryDriver.fromMap(
         userDoc.id,
-        userDoc.data()!,
+        data,
       );
 
       return {
@@ -47,6 +59,7 @@ class AuthService {
       };
     } on FirebaseAuthException catch (e) {
       String msg = 'Login failed';
+
       switch (e.code) {
         case 'user-not-found':
           msg = 'No user found with this email';
@@ -66,14 +79,18 @@ class AuthService {
         case 'too-many-requests':
           msg = 'Too many attempts. Please try again later';
           break;
+        default:
+          msg = e.message ?? e.code;
       }
+
       return {'error': msg};
     } catch (e) {
-      return {'error': 'An unexpected error occurred'};
+      print("🔥 LOGIN ERROR: $e");
+      return {'error': e.toString()};
     }
   }
 
-  // Signup with email verification and role selection
+  // ================= SIGNUP =================
   Future<String?> signup({
     required String name,
     required String email,
@@ -88,8 +105,8 @@ class AuthService {
       return 'Password must be at least 6 characters';
     }
 
-    // 🔹 UPDATED: Validate role - now accepts 'driver', 'admin', OR 'user'
-    if (role != 'driver' && role != 'admin' && role != 'user') {
+    // 🔥🔥🔥 FIXED HERE ONLY
+    if (role != 'driver' && role != 'admin' && role != 'customer') {
       return 'Invalid role selected';
     }
 
@@ -99,26 +116,20 @@ class AuthService {
         password: password,
       );
 
-      // Create user document in Firestore with selected role
       await _db.collection('users').doc(userCred.user!.uid).set({
         'name': name,
         'email': email,
         'phone': phone ?? '',
-        'role': role, // Stores 'driver', 'admin', or 'user'
+        'role': role,
         'created_at': FieldValue.serverTimestamp(),
         'email_verified': false,
       });
 
-      // Update display name
       await userCred.user!.updateDisplayName(name);
-
-      // Send verification email
       await userCred.user!.sendEmailVerification();
-
-      // Sign out user until they verify email
       await _auth.signOut();
 
-      return null; // success
+      return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case 'weak-password':
@@ -137,33 +148,7 @@ class AuthService {
     }
   }
 
-  // Resend verification email
-  Future<String?> resendVerificationEmail() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        return 'No user is currently signed in';
-      }
-
-      if (user.emailVerified) {
-        return 'Email is already verified';
-      }
-
-      await user.sendEmailVerification();
-      return null; // success
-    } on FirebaseAuthException catch (e) {
-      switch (e.code) {
-        case 'too-many-requests':
-          return 'Too many requests. Please wait before requesting another verification email';
-        default:
-          return 'Failed to send verification email: ${e.code}';
-      }
-    } catch (e) {
-      return 'Error: ${e.toString()}';
-    }
-  }
-
-  // Password Reset
+  // ================= RESET PASSWORD =================
   Future<String?> resetPassword(String email) async {
     if (email.isEmpty) {
       return 'Please enter your email';
@@ -171,7 +156,7 @@ class AuthService {
 
     try {
       await _auth.sendPasswordResetEmail(email: email);
-      return null; // success
+      return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case 'user-not-found':
@@ -188,12 +173,39 @@ class AuthService {
     }
   }
 
-  // Sign out
+  // ================= RESEND VERIFICATION =================
+  Future<String?> resendVerificationEmail() async {
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) {
+        return 'No user is currently signed in';
+      }
+
+      if (user.emailVerified) {
+        return 'Email is already verified';
+      }
+
+      await user.sendEmailVerification();
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'too-many-requests':
+          return 'Too many requests. Please wait before requesting another verification email';
+        default:
+          return 'Failed to send verification email: ${e.code}';
+      }
+    } catch (e) {
+      return 'Error: ${e.toString()}';
+    }
+  }
+
+  // ================= LOGOUT =================
   Future<void> logout() async {
     await _auth.signOut();
   }
 
-  // Get current driver
+  // ================= GET CURRENT DRIVER =================
   Future<DeliveryDriver?> getCurrentDriver() async {
     final user = _auth.currentUser;
     if (user == null) return null;
@@ -201,12 +213,14 @@ class AuthService {
     final doc = await _db.collection('users').doc(user.uid).get();
     if (!doc.exists) return null;
 
-    return DeliveryDriver.fromMap(doc.id, doc.data()!);
+    final data = doc.data();
+    if (data == null) return null;
+
+    return DeliveryDriver.fromMap(doc.id, data);
   }
 
-  // Check if user is logged in
+  // ================= HELPERS =================
   User? get currentUser => _auth.currentUser;
 
-  // Auth state changes stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 }

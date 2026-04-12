@@ -13,7 +13,19 @@ class MapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => MapVM()..goToCurrentLocation(),
+      create: (_) {
+        final vm = MapVM();
+
+        Future.delayed(const Duration(seconds: 2), () async {
+          try {
+            await vm.goToCurrentLocation();
+          } catch (e) {
+            debugPrint("goToCurrentLocation error: $e");
+          }
+        });
+
+        return vm;
+      },
       child: const _MapView(),
     );
   }

@@ -6,6 +6,9 @@ import '/view/map_screen.dart';
 import '/view/signup.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// 🔥 ADDED (NEW IMPORT ONLY)
+import '/view/customer_home_page.dart';
+
 // ✅ ADDED: to get Firebase ID token and pass it to Node dashboard
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -102,10 +105,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // Launch admin dashboard on your PC from Android emulator
   Future<void> _launchAdminDashboard() async {
-    // ✅ Android emulator uses 10.0.2.2 to access your PC (host machine)
-
     try {
-      // ✅ IMPORTANT: pass Firebase ID token so Node can call /api/me and show REAL admin name
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         _showSnack('No logged in user found.');
@@ -114,12 +114,10 @@ class _LoginPageState extends State<LoginPage> {
 
       final idToken = await user.getIdToken(true);
 
-      // ✅ Use /index.html to avoid "Cannot GET /index.html" issues if / is different
       final Uri url = Uri.parse('http://10.0.2.2:3000/index.html').replace(
         queryParameters: {'token': idToken},
       );
 
-      // ✅ Use launchUrl directly (more reliable than canLaunchUrl on some devices)
       final opened = await launchUrl(
         url,
         mode: LaunchMode.externalApplication,
@@ -135,6 +133,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // 🔥 ONLY EDITED FUNCTION
   void login() async {
     final authVM = Provider.of<AuthViewModel>(context, listen: false);
 
@@ -150,14 +149,19 @@ class _LoginPageState extends State<LoginPage> {
       final role = (result['role'] ?? '').toString().toLowerCase().trim();
 
       if (role == 'admin') {
-        // Admin: Open dashboard in browser (with token)
         await _launchAdminDashboard();
-      } else {
-        // Driver: Navigate to MapScreen
+      } else if (role == 'driver') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MapScreen()),
         );
+      } else if (role == 'customer') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+        );
+      } else {
+        _showSnack("Unknown role: $role");
       }
     }
   }
