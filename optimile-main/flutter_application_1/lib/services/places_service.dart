@@ -131,6 +131,21 @@ class PlacesService {
 }
 
 
+  /// ================= GEOCODE ADDRESS =================
+  Future<LatLng?> geocodeAddress(String address) async {
+    final encoded = Uri.encodeComponent(address);
+    final url =
+        'https://maps.googleapis.com/maps/api/geocode/json?address=$encoded&key=$apiKey';
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) { return null; }
+    final data = json.decode(response.body);
+    if (data['status'] != 'OK' ||
+        data['results'] == null ||
+        (data['results'] as List).isEmpty) { return null; }
+    final loc = data['results'][0]['geometry']['location'];
+    return LatLng(loc['lat'], loc['lng']);
+  }
+
   /// ================= DECODE POLYLINE =================
   List<LatLng> decodePolyline(String encoded) {
     List<LatLng> polyline = [];

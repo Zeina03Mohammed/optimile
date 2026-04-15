@@ -4,14 +4,15 @@ import 'package:provider/provider.dart';
 import '../viewmodel/mapvm.dart';
 import '../env.dart';
 import '../viewmodel/authvm.dart';
-import 'package:flutter_typeahead/flutter_typeahead.dart';
-import '../models/stop_model.dart';
 
 class MapScreen extends StatelessWidget {
   const MapScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final authVM = Provider.of<AuthViewModel>(context, listen: false);
+    final driverName = authVM.currentDriver?.name ?? '';
+
     return ChangeNotifierProvider(
       create: (_) {
         final vm = MapVM();
@@ -19,8 +20,9 @@ class MapScreen extends StatelessWidget {
         Future.delayed(const Duration(seconds: 2), () async {
           try {
             await vm.goToCurrentLocation();
+            await vm.loadStopsFromCsv(driverName);
           } catch (e) {
-            debugPrint("goToCurrentLocation error: $e");
+            debugPrint("map init error: $e");
           }
         });
 
@@ -52,35 +54,6 @@ class _MapView extends StatelessWidget {
             polylines: vm.polylines,
             myLocationEnabled: true,
             onMapCreated: (c) => vm.mapController = c,
-            onTap: (latLng) async {
-              // Unified stop configuration: fragile + time window
-              final config = await vm.showStopConfigDialog(context);
-              if (config == null) return;
-
-              final now = TimeOfDay.now();
-              final nowMinutes = now.hour * 60 + now.minute;
-
-              if (config.end != null) {
-                final endMinutes = config.end!.hour * 60 + config.end!.minute;
-                if (endMinutes < nowMinutes) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Deadline is in the past. Please choose a later time.",
-                      ),
-                    ),
-                  );
-                  return;
-                }
-              }
-
-              vm.addStop(
-                latLng,
-                isFragile: config.isFragile,
-                startTime: config.start,
-                endTime: config.end,
-              );
-            },
           ),
 
           Positioned(
@@ -96,49 +69,59 @@ class _MapView extends StatelessWidget {
             ),
           ),
 
-          if (vm.showSearchBar)
+          // Loading indicator while stops are being geocoded
+          if (vm.isLoadingStops)
             Positioned(
               top: 40,
               left: 16,
               right: 16,
               child: Material(
-                elevation: 6,
+                elevation: 4,
                 borderRadius: BorderRadius.circular(12),
-                child: TypeAheadField<Place>(
-                  controller: vm.searchController,
-                  focusNode: vm.searchFocusNode,
-                  suggestionsCallback: vm.getSuggestions,
-                  itemBuilder: (context, place) =>
-                      ListTile(title: Text(place.description)),
-                  onSelected: vm.selectSuggestion,
-                  builder: (context, controller, focusNode) {
-                    return TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      decoration: InputDecoration(
-                        hintText: "Search place",
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: vm.closeSearchBar,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.all(14),
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                    );
-                  },
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          vm.loadingStatus,
+                          style: const TextStyle(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
 
-          if (!vm.showSearchBar)
+          // Status chip once loading is done
+          if (!vm.isLoadingStops && vm.loadingStatus.isNotEmpty && !vm.navigationStarted)
             Positioned(
               top: 40,
+              left: 16,
               right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.search, size: 30),
-                color: Colors.black,
-                onPressed: () => vm.openSearchBar(),
+              child: IgnorePointer(
+                child: Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withValues(alpha: 0.92),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      vm.loadingStatus,
+                      style: const TextStyle(fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               ),
             ),
 
@@ -484,21 +467,6 @@ class _MapView extends StatelessWidget {
             child: vm.hasAnyStops || vm.routes.isNotEmpty
                 ? ListView(
                     children: [
-                      if (!vm.navigationStarted)
-                        ListTile(
-                          leading: const Icon(Icons.add_circle_outline,
-                              color: Colors.white),
-                          title: const Text(
-                            'Add route (another car)',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          onTap: () {
-                            vm.addRoute();
-                          },
-                        ),
                       const Divider(color: Colors.grey),
                       Theme(
                         data: Theme.of(context).copyWith(
@@ -580,7 +548,7 @@ class _MapView extends StatelessWidget {
                               ListTile(
                                 title: Text(
                                   routeStops.isEmpty
-                                      ? 'Tap map to add stops'
+                                      ? 'Loading stops...'
                                       : '${routeStops.length} stop(s)',
                                   style: const TextStyle(
                                     color: Colors.white70,
@@ -675,7 +643,7 @@ class _MapView extends StatelessWidget {
                   )
                 : const Center(
                     child: Text(
-                      'No routes. Add a route and tap the map to add stops.',
+                      'Your stops will load automatically after login.',
                       style: TextStyle(color: Colors.grey),
                       textAlign: TextAlign.center,
                     ),

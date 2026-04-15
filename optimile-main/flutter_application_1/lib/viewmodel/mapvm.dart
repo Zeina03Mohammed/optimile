@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:csv/csv.dart';
 import '../env.dart';
 import '../models/weather_data.dart';
 import '../models/road_incident.dart';
@@ -504,6 +506,84 @@ void addStop(
   _routes[_selectedRouteIndex].stops.add(stop);
   rebuildMap();
 }
+
+  // ================= AUTO-LOAD STOPS FROM CSV =================
+  bool isLoadingStops = false;
+  String loadingStatus = '';
+
+  Future<void> loadStopsFromCsv(String driverName) async {
+    if (driverName.isEmpty) return;
+    isLoadingStops = true;
+    loadingStatus = 'Loading your deliveries...';
+    notifyListeners();
+
+    try {
+      final csvStr = await rootBundle.loadString('assets/data/deliveries.csv');
+      final rows = const CsvToListConverter().convert(csvStr, eol: '\n');
+      if (rows.isEmpty) {
+        loadingStatus = 'No delivery data found.';
+        isLoadingStops = false;
+        notifyListeners();
+        return;
+      }
+
+      final headers = rows[0].map((h) => h.toString().trim()).toList();
+      final driverIdx   = headers.indexOf('driver_name');
+      final addressIdx  = headers.indexOf('address');
+      final areaIdx     = headers.indexOf('area');
+      final fragileIdx  = headers.indexOf('fragile');
+      final customerIdx = headers.indexOf('customer_name');
+
+      final myRows = rows.skip(1).where((row) {
+        if (row.length <= driverIdx) { return false; }
+        return row[driverIdx].toString().trim().toLowerCase() ==
+            driverName.trim().toLowerCase();
+      }).toList();
+
+      if (myRows.isEmpty) {
+        loadingStatus = 'No stops assigned to $driverName.';
+        isLoadingStops = false;
+        notifyListeners();
+        return;
+      }
+
+      int loaded = 0;
+      for (final row in myRows) {
+        loadingStatus = 'Geocoding stop ${loaded + 1} of ${myRows.length}...';
+        notifyListeners();
+
+        final address =
+            '${row[addressIdx]}, ${row[areaIdx]}, Cairo, Egypt';
+        final isFragile =
+            row[fragileIdx].toString().trim().toLowerCase() == 'yes';
+        final customerName =
+            customerIdx >= 0 ? row[customerIdx].toString() : '';
+
+        final latLng = await _placesService.geocodeAddress(address);
+        if (latLng == null) { continue; }
+
+        final stop = Stop(
+          location: latLng,
+          title: '$customerName – ${row[addressIdx]}',
+          isFragile: isFragile,
+        );
+        _routes[0].stops.add(stop);
+        loaded++;
+      }
+
+      loadingStatus = loaded > 0
+          ? '$loaded stops loaded'
+          : 'No stops could be geocoded for $driverName.';
+
+      if (loaded > 0) { await rebuildMap(); }
+    } catch (e) {
+      loadingStatus = 'Error loading stops.';
+      debugPrint('loadStopsFromCsv error: $e');
+    }
+
+    isLoadingStops = false;
+    notifyListeners();
+  }
 
   void removeStop(int index) {
     if (navigationStarted) return;
