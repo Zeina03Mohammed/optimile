@@ -1,0 +1,17 @@
+{
+  "opt-demo-key-001": {
+    "company": "Demo Company",
+    "plan": "free",
+    "active": true
+  },
+  "opt-fedex-key-002": {
+    "company": "FedEx Egypt",
+    "plan": "pro",
+    "active": true
+  },
+  "opt-amazon-key-003": {
+    "company": "Amazon Logistics",
+    "plan": "pro",
+    "active": true
+  }
+}

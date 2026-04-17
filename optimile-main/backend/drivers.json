@@ -1,0 +1,109 @@
+[
+  {
+    "id": 28,
+    "name": "Ali Edris",
+    "areas_served": [
+      "Downtown"
+    ],
+    "vehicle": "Scooter",
+    "centroid_lat": 30.0444,
+    "centroid_lng": 31.2357,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 29,
+    "name": "Hassan Hossny",
+    "areas_served": [
+      "Maadi"
+    ],
+    "vehicle": "Van",
+    "centroid_lat": 29.9608,
+    "centroid_lng": 31.2503,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 64,
+    "name": "Mohamed Samir",
+    "areas_served": [
+      "New Cairo",
+      "Obour"
+    ],
+    "vehicle": "Van",
+    "centroid_lat": 30.0280,
+    "centroid_lng": 31.4913,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 57,
+    "name": "Abd El Rahman Mostafa",
+    "areas_served": [
+      "Nasr City",
+      "Heliopolis"
+    ],
+    "vehicle": "Scooter",
+    "centroid_lat": 30.0600,
+    "centroid_lng": 31.3300,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 31,
+    "name": "Ahmed Hossam",
+    "areas_served": [
+      "Shubra"
+    ],
+    "vehicle": "Scooter",
+    "centroid_lat": 30.1000,
+    "centroid_lng": 31.2400,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 62,
+    "name": "Ayman Hamad",
+    "areas_served": [
+      "Heliopolis"
+    ],
+    "vehicle": "Scooter",
+    "centroid_lat": 30.0900,
+    "centroid_lng": 31.3200,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 72,
+    "name": "Basma Saber",
+    "areas_served": [
+      "Nasr City"
+    ],
+    "vehicle": "Scooter",
+    "centroid_lat": 30.0600,
+    "centroid_lng": 31.3300,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  },
+  {
+    "id": 40,
+    "name": "Abdeen",
+    "areas_served": [
+      "Downtown",
+      "Shubra"
+    ],
+    "vehicle": "Van",
+    "centroid_lat": 30.0500,
+    "centroid_lng": 31.2480,
+    "deliveries_today": 0,
+    "delivered_count": 0,
+    "status": "available"
+  }
+]

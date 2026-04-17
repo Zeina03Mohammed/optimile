@@ -18,15 +18,6 @@ class AuthService {
         password: password,
       );
 
-      // Check if email is verified
-      if (!userCred.user!.emailVerified) {
-        await _auth.signOut(); // Sign out unverified user
-        return {
-          'error': 'Please verify your email before logging in',
-          'emailNotVerified': true,
-        };
-      }
-
       final userDoc =
           await _db.collection('users').doc(userCred.user!.uid).get();
 

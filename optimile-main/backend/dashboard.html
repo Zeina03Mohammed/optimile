@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Optimile — Company Dashboard</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    header .logo { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    header .logo span { color: #6366f1; }
+    header .badge { background: #6366f1; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+    header .date-badge { background: #1e2235; color: #94a3b8; font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid #2d3148; }
+    header .spacer { flex: 1; }
+    header .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    header .status-label { font-size: 13px; color: #94a3b8; }
+    #last-updated { font-size: 12px; color: #475569; }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 10px 24px;
+      display: flex;
+      gap: 32px;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .stat { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+    .stat .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat .value { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+    .stat .sub { font-size: 11px; color: #22c55e; }
+    .stat .sub.warn { color: #f59e0b; }
+
+    /* ── MAIN LAYOUT ── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+    .map-wrapper { flex: 1; position: relative; overflow: hidden; }
+    #map { width: 100%; height: 100%; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 400px;
+      background: #1a1d27;
+      border-left: 1px solid #2d3148;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .sidebar-tabs { display: flex; border-bottom: 1px solid #2d3148; flex-shrink: 0; }
+    .tab-btn {
+      flex: 1; padding: 10px; background: none; border: none;
+      color: #64748b; font-size: 12px; cursor: pointer;
+      border-bottom: 2px solid transparent; transition: all 0.15s;
+    }
+    .tab-btn.active { color: #6366f1; border-bottom-color: #6366f1; }
+
+    .tab-panel { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
+    .tab-panel.active { display: flex; }
+
+    /* ── DRIVER CARDS ── */
+    .driver-card {
+      border-bottom: 1px solid #2d3148;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .driver-card:hover { background: #1e2235; }
+    .driver-card .dc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .driver-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; flex-shrink: 0;
+    }
+    .driver-card .dc-name { font-weight: 600; font-size: 14px; }
+    .driver-card .dc-meta { font-size: 11px; color: #64748b; }
+    .driver-card .dc-upcoming { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    .driver-card .dc-bars { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+    .progress-bar { flex: 1; height: 4px; background: #2d3148; border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #22c55e; border-radius: 2px; transition: width 0.4s; }
+    .dc-count { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+
+    /* ── ORDERS TABLE ── */
+    .orders-filter {
+      padding: 10px 16px; border-bottom: 1px solid #2d3148;
+      display: flex; gap: 8px; flex-shrink: 0;
+    }
+    .filter-btn {
+      padding: 4px 10px; border-radius: 99px; border: 1px solid #2d3148;
+      background: none; color: #94a3b8; font-size: 12px; cursor: pointer; transition: all 0.1s;
+    }
+    .filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+
+    .orders-list { flex: 1; overflow-y: auto; }
+    .order-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-bottom: 1px solid #1e2235;
+      font-size: 12px; transition: background 0.1s;
+    }
+    .order-row:hover { background: #1e2235; }
+    .order-id { color: #6366f1; font-weight: 600; min-width: 52px; }
+    .order-info { flex: 1; min-width: 0; }
+    .order-customer { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .order-area { color: #64748b; font-size: 11px; }
+    .status-badge { padding: 2px 7px; border-radius: 99px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .status-pending { background: #1e3a5f; color: #60a5fa; }
+    .status-delivered { background: #14532d; color: #4ade80; }
+    .fragile-icon { font-size: 13px; flex-shrink: 0; }
+
+    /* ── SCHEDULE TAB ── */
+    .schedule-list { flex: 1; overflow-y: auto; }
+    .schedule-day {
+      border-bottom: 1px solid #2d3148;
+    }
+    .schedule-day-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .schedule-day-header:hover { background: #1e2235; }
+    .schedule-day-header.today { background: #1e2235; border-left: 3px solid #6366f1; }
+    .schedule-day-header.selected-day { border-left: 3px solid #f59e0b; }
+    .sched-date { font-size: 13px; font-weight: 600; }
+    .sched-weekday { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .sched-total { font-size: 12px; color: #94a3b8; }
+    .sched-today-badge {
+      background: #6366f1; color: #fff;
+      font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 99px;
+    }
+    .schedule-drivers { display: none; padding: 0 16px 10px; }
+    .schedule-drivers.open { display: block; }
+    .sched-driver-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid #1e2235; font-size: 12px;
+    }
+    .sched-driver-row:last-child { border-bottom: none; }
+    .sched-driver-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .sched-driver-name { flex: 1; color: #cbd5e1; }
+    .sched-driver-counts { color: #94a3b8; white-space: nowrap; }
+    .sched-remaining { color: #f59e0b; font-weight: 600; }
+    .sched-done { color: #22c55e; font-weight: 600; }
+
+    /* ── UPLOAD PANEL ── */
+    .upload-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .upload-card { background: #1e2235; border: 1px dashed #2d3148; border-radius: 10px; padding: 16px; }
+    .upload-card h4 { font-size: 13px; margin-bottom: 6px; color: #cbd5e1; }
+    .upload-card p { font-size: 11px; color: #64748b; margin-bottom: 10px; }
+    .upload-card input[type=file] { font-size: 12px; color: #94a3b8; width: 100%; }
+    .upload-card input[type=text] {
+      width: 100%; padding: 6px 10px;
+      background: #0f1117; border: 1px solid #2d3148; border-radius: 6px;
+      color: #e2e8f0; font-size: 12px; margin-bottom: 8px;
+    }
+    .btn { padding: 7px 14px; border-radius: 6px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-success { background: #16a34a; color: #fff; }
+    .upload-result { font-size: 11px; color: #4ade80; margin-top: 6px; }
+    .upload-error  { font-size: 11px; color: #f87171; margin-top: 6px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #1a1d27; }
+    ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 2px; }
+
+    /* ── DATE NAVIGATOR (floating on map) ── */
+    .date-nav {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 99px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .date-nav-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 18px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .date-nav-btn:hover { background: #2d3148; color: #fff; }
+    .date-nav-btn:disabled { color: #2d3148; cursor: default; }
+    .date-nav-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 18px;
+      min-width: 160px;
+      border-left: 1px solid #2d3148;
+      border-right: 1px solid #2d3148;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .date-nav-center:hover { background: #1e2235; }
+    .date-nav-label { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+    .date-nav-sub { font-size: 10px; color: #64748b; }
+    .date-nav-today { font-size: 10px; color: #6366f1; font-weight: 700; }
+    #map-date-input { display: none; }
+
+    /* ── MAP DATE BADGE (top center of map) ── */
+    .map-viewing-badge {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(26,29,39,0.92);
+      border: 1px solid #2d3148;
+      border-radius: 99px;
+      padding: 4px 14px;
+      font-size: 12px;
+      color: #94a3b8;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .map-viewing-badge span { color: #6366f1; font-weight: 700; }
+
+    /* Leaflet popup overrides */
+    .leaflet-popup-content-wrapper {
+      background: #1a1d27 !important; color: #e2e8f0 !important;
+      border: 1px solid #2d3148 !important; border-radius: 8px !important; font-size: 12px !important;
+    }
+    .leaflet-popup-tip { background: #1a1d27 !important; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Opti<span>mile</span></div>
+  <div class="badge">LIVE</div>
+  <div class="date-badge" id="header-date">—</div>
+  <div class="spacer"></div>
+  <div class="status-dot"></div>
+  <div class="status-label">API Online</div>
+  &nbsp;&nbsp;
+  <div id="last-updated">Updating...</div>
+</header>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="label">Today's Orders</div>
+    <div class="value" id="stat-total">—</div>
+    <div class="sub" id="stat-date-sub">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Delivered</div>
+    <div class="value" id="stat-delivered">—</div>
+    <div class="sub" id="stat-delivered-pct">—%</div>
+  </div>
+  <div class="stat">
+    <div class="label">Remaining</div>
+    <div class="value" id="stat-pending">—</div>
+    <div class="sub warn">pending today</div>
+  </div>
+  <div class="stat">
+    <div class="label">Active Drivers</div>
+    <div class="value" id="stat-drivers">—</div>
+    <div class="sub">in field</div>
+  </div>
+  <div class="stat">
+    <div class="label">Fragile</div>
+    <div class="value" id="stat-fragile">—</div>
+    <div class="sub">handle with care</div>
+  </div>
+  <div class="stat">
+    <div class="label">Total Backlog</div>
+    <div class="value" id="stat-backlog">—</div>
+    <div class="sub">all upcoming days</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="map-wrapper">
+    <div id="map"></div>
+
+    <!-- Viewing badge top center — outside #map so Leaflet doesn't wipe it -->
+    <div class="map-viewing-badge" id="map-viewing-badge">
+      Viewing: <span id="map-viewing-date">—</span>
+    </div>
+
+    <!-- Date navigator bottom center -->
+    <div class="date-nav">
+      <button class="date-nav-btn" id="date-prev" onclick="shiftDate(-1)">&#8249;</button>
+      <div class="date-nav-center" onclick="openDatePicker()" title="Click to pick a date">
+        <div class="date-nav-label" id="date-nav-label">—</div>
+        <div id="date-nav-sub" class="date-nav-sub">—</div>
+      </div>
+      <button class="date-nav-btn" id="date-next" onclick="shiftDate(1)">&#8250;</button>
+    </div>
+    <input type="date" id="map-date-input" onchange="onDatePicked(this.value)" />
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" onclick="switchTab('drivers', this)">Drivers</button>
+      <button class="tab-btn" onclick="switchTab('orders', this)">Today's Orders</button>
+      <button class="tab-btn" onclick="switchTab('schedule', this)">Schedule</button>
+      <button class="tab-btn" onclick="switchTab('upload', this)">Upload</button>
+    </div>
+
+    <!-- DRIVERS TAB -->
+    <div class="tab-panel active" id="tab-drivers">
+      <div id="drivers-list"></div>
+    </div>
+
+    <!-- ORDERS TAB -->
+    <div class="tab-panel" id="tab-orders">
+      <div class="orders-filter">
+        <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+        <button class="filter-btn" onclick="setFilter('pending', this)">Pending</button>
+        <button class="filter-btn" onclick="setFilter('delivered', this)">Delivered</button>
+      </div>
+      <div class="orders-list" id="orders-list"></div>
+    </div>
+
+    <!-- SCHEDULE TAB -->
+    <div class="tab-panel" id="tab-schedule">
+      <div class="schedule-list" id="schedule-list"></div>
+    </div>
+
+    <!-- UPLOAD TAB -->
+    <div class="tab-panel" id="tab-upload">
+      <div class="upload-panel">
+        <div class="upload-card">
+          <h4>📡 API Key</h4>
+          <p>Enter your API key to authenticate all requests.</p>
+          <input type="text" id="api-key-input" placeholder="e.g. opt-demo-key-001" value="opt-demo-key-001" />
+        </div>
+        <div class="upload-card">
+          <h4>🚗 Upload Driver History CSV</h4>
+          <p>Columns: Driver ID, Driver Name, Lat, Lng</p>
+          <input type="file" id="driver-file" accept=".csv" />
+          <button class="btn btn-primary" style="margin-top:8px" onclick="uploadDrivers()">Upload Drivers</button>
+          <div id="driver-upload-result"></div>
+        </div>
+        <div class="upload-card">
+          <h4>📦 Upload Orders CSV</h4>
+          <p>Columns: order_id, customer_name, phone, address, area, fragile, package_size, vehicle_required</p>
+          <input type="file" id="orders-file" accept=".csv" />
+          <button class="btn btn-success" style="margin-top:8px" onclick="uploadOrders()">Upload & Assign</button>
+          <div id="orders-upload-result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let API_KEY = 'opt-demo-key-001';
+let orderFilter = 'all';
+const COLORS = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#14b8a6'];
+
+// Available dates loaded from schedule
+let availableDates = [];
+let selectedDate   = todayStr();   // currently viewed date on map
+
+// ── MAP SETUP ────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([30.044, 31.235], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 19,
+}).addTo(map);
+
+let driverMarkers = {};
+let orderMarkers = [];
+
+function driverIcon(color, initials) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4)">${initials}</div>`,
+    iconSize: [34, 34], iconAnchor: [17, 17],
+  });
+}
+
+function orderIcon(delivered) {
+  const dot = delivered ? '#4ade80' : '#60a5fa';
+  const bg  = delivered ? '#14532d' : '#1e3a5f';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:${dot};border:2px solid ${bg};box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>`,
+    iconSize: [10, 10], iconAnchor: [5, 5],
+  });
+}
+
+// ── DATA ────────────────────────────────────────────────────────────
+let driversData  = [];
+let ordersData   = [];   // for selected date
+let todayOrders  = [];   // always today (for stats bar)
+let scheduleData = [];
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function apiFetch(path) {
+  const key = document.getElementById('api-key-input')?.value.trim() || API_KEY;
+  const res = await fetch(API_BASE + path, { headers: { 'X-API-Key': key } });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function refresh() {
+  try {
+    const today = todayStr();
+    const [dRes, oRes, todayRes, sRes] = await Promise.all([
+      apiFetch('/api/v1/drivers'),
+      apiFetch(`/api/v1/orders?date=${selectedDate}`),
+      apiFetch(`/api/v1/orders?date=${today}`),
+      apiFetch('/api/v1/schedule?days=30'),
+    ]);
+    driversData  = dRes.drivers  || [];
+    ordersData   = oRes.orders   || [];
+    todayOrders  = todayRes.orders || [];
+    scheduleData = sRes.schedule || [];
+
+    // Build available dates from schedule
+    availableDates = scheduleData.map(d => d.date);
+
+    renderHeader();
+    renderStats();
+    renderDrivers();
+    renderOrders();
+    renderSchedule();
+    renderMap();
+    renderDateNav();
+
+    document.getElementById('last-updated').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    console.error('Refresh error:', e);
+  }
+}
+
+// ── HEADER DATE ───────────────────────────────────────────────────
+function renderHeader() {
+  const d = new Date();
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  document.getElementById('header-date').textContent = d.toLocaleDateString('en-US', opts);
+}
+
+// ── STATS ────────────────────────────────────────────────────────
+function renderStats() {
+  // Stats bar always shows TODAY's numbers
+  const total     = todayOrders.length;
+  const delivered = todayOrders.filter(o => o.status === 'delivered').length;
+  const pending   = total - delivered;
+  const fragile   = todayOrders.filter(o => o.fragile === 'Yes').length;
+  const pct       = total ? Math.round((delivered / total) * 100) : 0;
+
+  const today = todayStr();
+  const backlog = scheduleData
+    .filter(d => d.date > today)
+    .reduce((sum, d) => sum + d.total_orders, 0);
+
+  document.getElementById('stat-total').textContent         = total;
+  document.getElementById('stat-date-sub').textContent      = today;
+  document.getElementById('stat-delivered').textContent     = delivered;
+  document.getElementById('stat-delivered-pct').textContent = pct + '%';
+  document.getElementById('stat-pending').textContent       = pending;
+  document.getElementById('stat-drivers').textContent       = driversData.length;
+  document.getElementById('stat-fragile').textContent       = fragile;
+  document.getElementById('stat-backlog').textContent       = backlog;
+}
+
+// ── DATE NAVIGATOR ────────────────────────────────────────────────
+function renderDateNav() {
+  const today   = todayStr();
+  const idx     = availableDates.indexOf(selectedDate);
+  const isToday = selectedDate === today;
+
+  // Label
+  const d = new Date(selectedDate + 'T00:00:00');
+  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+
+  document.getElementById('date-nav-label').textContent = label;
+  const subEl = document.getElementById('date-nav-sub');
+  subEl.className = isToday ? 'date-nav-today' : 'date-nav-sub';
+  subEl.textContent = isToday ? '● TODAY' : weekday;
+
+  // Arrows
+  document.getElementById('date-prev').disabled = idx <= 0;
+  document.getElementById('date-next').disabled = idx >= availableDates.length - 1;
+
+  // Map badge
+  document.getElementById('map-viewing-date').textContent =
+    isToday ? 'Today — ' + label : label + ' (' + weekday + ')';
+
+  // Update orders tab label
+  const ordTab = document.querySelector('.tab-btn[onclick*="orders"]');
+  if (ordTab) ordTab.textContent = isToday ? "Today's Orders" : label + ' Orders';
+}
+
+function shiftDate(dir) {
+  const idx = availableDates.indexOf(selectedDate);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= availableDates.length) return;
+  setMapDate(availableDates[newIdx]);
+}
+
+function openDatePicker() {
+  const input = document.getElementById('map-date-input');
+  input.value = selectedDate;
+  input.showPicker ? input.showPicker() : input.click();
+}
+
+function onDatePicked(val) {
+  if (!val) return;
+  // Snap to nearest available date
+  if (availableDates.includes(val)) {
+    setMapDate(val);
+  } else {
+    // find closest
+    const closest = availableDates.reduce((a, b) =>
+      Math.abs(new Date(b) - new Date(val)) < Math.abs(new Date(a) - new Date(val)) ? b : a
+    );
+    setMapDate(closest);
+  }
+}
+
+async function setMapDate(date) {
+  selectedDate = date;
+  try {
+    const oRes = await apiFetch(`/api/v1/orders?date=${selectedDate}`);
+    ordersData = oRes.orders || [];
+    renderOrders();
+    renderMap();
+    renderDateNav();
+  } catch(e) { console.error(e); }
+}
+
+// ── DRIVERS SIDEBAR ──────────────────────────────────────────────
+function renderDrivers() {
+  const today = todayStr();
+  const el = document.getElementById('drivers-list');
+
+  // Build upcoming totals per driver from schedule
+  const upcomingMap = {};
+  scheduleData.filter(d => d.date > today).forEach(day => {
+    day.drivers.forEach(dr => {
+      upcomingMap[dr.driver_id] = (upcomingMap[dr.driver_id] || 0) + dr.remaining;
+    });
+  });
+
+  el.innerHTML = driversData.map((d, i) => {
+    const color    = COLORS[i % COLORS.length];
+    const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const total    = d.deliveries_today || 0;
+    const done     = d.delivered_count  || 0;
+    const pct      = total ? Math.round((done / total) * 100) : 0;
+    const areas    = (d.areas_served || []).join(', ');
+    const upcoming = upcomingMap[String(d.id)] || 0;
+
+    return `
+      <div class="driver-card" onclick="focusDriver(${d.centroid_lat}, ${d.centroid_lng})">
+        <div class="dc-header">
+          <div class="driver-avatar" style="background:${color}">${initials}</div>
+          <div style="flex:1">
+            <div class="dc-name">${d.name}</div>
+            <div class="dc-meta">📍 ${areas} &nbsp;·&nbsp; 🚗 ${d.vehicle || 'Van'}</div>
+            ${upcoming > 0 ? `<div class="dc-upcoming">📅 ${upcoming} orders in upcoming days</div>` : ''}
+          </div>
+        </div>
+        <div class="dc-bars">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="dc-count">${done}/${total} today</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function focusDriver(lat, lng) {
+  map.setView([lat, lng], 13);
+}
+
+// ── ORDERS SIDEBAR ────────────────────────────────────────────────
+function setFilter(f, btn) {
+  orderFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderOrders();
+}
+
+function renderOrders() {
+  let orders = ordersData;
+  if (orderFilter !== 'all') orders = orders.filter(o => o.status === orderFilter);
+
+  const el = document.getElementById('orders-list');
+  if (!orders.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:#64748b;font-size:13px">No orders found</div>`;
+    return;
+  }
+
+  el.innerHTML = orders.map(o => {
+    const fragileIcon = o.fragile === 'Yes' ? '⚠️' : '';
+    const badge = o.status === 'delivered'
+      ? '<span class="status-badge status-delivered">Delivered</span>'
+      : '<span class="status-badge status-pending">Pending</span>';
+    return `
+      <div class="order-row">
+        <div class="order-id">#${o.order_id}</div>
+        <div class="order-info">
+          <div class="order-customer">${o.customer_name}</div>
+          <div class="order-area">${o.area} · ${o.driver_name}</div>
+        </div>
+        <div class="fragile-icon">${fragileIcon}</div>
+        ${badge}
+      </div>`;
+  }).join('');
+}
+
+// ── SCHEDULE TAB ─────────────────────────────────────────────────
+function renderSchedule() {
+  const el = document.getElementById('schedule-list');
+  if (!scheduleData.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:#64748b;font-size:13px">No schedule data</div>`;
+    return;
+  }
+
+  el.innerHTML = scheduleData.map((day, idx) => {
+    const todayBadge = day.is_today ? '<span class="sched-today-badge">TODAY</span>' : '';
+    const isSelected  = day.date === selectedDate;
+    const headerClass = (day.is_today ? 'schedule-day-header today' : 'schedule-day-header')
+                      + (isSelected ? ' selected-day' : '');
+    const driversHtml = day.drivers.map((dr, di) => {
+      const color = COLORS[di % COLORS.length];
+      const remainClass = dr.remaining > 0 ? 'sched-remaining' : 'sched-done';
+      return `
+        <div class="sched-driver-row">
+          <div class="sched-driver-dot" style="background:${color}"></div>
+          <div class="sched-driver-name">${dr.driver_name}</div>
+          <div class="sched-driver-counts">
+            <span class="${remainClass}">${dr.remaining} left</span>
+            <span style="color:#475569"> / ${dr.total} total</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Auto-open today
+    const openClass = day.is_today ? 'open' : '';
+
+    const mapBtn = `<button onclick="event.stopPropagation();setMapDate('${day.date}');switchTab('orders',document.querySelector('.tab-btn[onclick*=orders]'))"
+      style="background:#6366f1;border:none;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;cursor:pointer;margin-left:6px"
+      title="View on map">🗺 Map</button>`;
+
+    return `
+      <div class="schedule-day">
+        <div class="${headerClass}" onclick="toggleDay(this)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div>
+              <div class="sched-date">${day.date} ${todayBadge}${mapBtn}</div>
+              <div class="sched-weekday">${day.weekday}</div>
+            </div>
+          </div>
+          <div class="sched-total">${day.total_orders} orders ▾</div>
+        </div>
+        <div class="schedule-drivers ${openClass}">${driversHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleDay(header) {
+  const panel = header.nextElementSibling;
+  panel.classList.toggle('open');
+}
+
+// ── MAP RENDERING ─────────────────────────────────────────────────
+function renderMap() {
+  orderMarkers.forEach(m => map.removeLayer(m));
+  orderMarkers = [];
+
+  // Driver markers
+  driversData.forEach((d, i) => {
+    const color    = COLORS[i % COLORS.length];
+    const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const lat = parseFloat(d.centroid_lat);
+    const lng = parseFloat(d.centroid_lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const total = d.deliveries_today || 0;
+    const done  = d.delivered_count  || 0;
+
+    if (driverMarkers[d.id]) {
+      driverMarkers[d.id].setLatLng([lat, lng]);
+    } else {
+      driverMarkers[d.id] = L.marker([lat, lng], { icon: driverIcon(color, initials) })
+        .addTo(map)
+        .bindPopup(`
+          <b>${d.name}</b><br/>
+          Areas: ${(d.areas_served||[]).join(', ')}<br/>
+          Vehicle: ${d.vehicle || 'Van'}<br/>
+          Today: ${done} delivered / ${total} total
+        `);
+    }
+  });
+
+  // Today's order markers only
+  ordersData.forEach(o => {
+    const lat = parseFloat(o.lat);
+    const lng = parseFloat(o.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const delivered = o.status === 'delivered';
+    const m = L.marker([lat, lng], { icon: orderIcon(delivered) })
+      .addTo(map)
+      .bindPopup(`
+        <b>#${o.order_id}</b><br/>
+        Customer: ${o.customer_name}<br/>
+        Address: ${o.address}<br/>
+        Driver: ${o.driver_name}<br/>
+        Fragile: ${o.fragile}<br/>
+        Status: <b>${o.status}</b>
+      `);
+    orderMarkers.push(m);
+  });
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── UPLOAD HANDLERS ───────────────────────────────────────────────
+async function uploadDrivers() {
+  const file = document.getElementById('driver-file').files[0];
+  const key  = document.getElementById('api-key-input').value.trim();
+  const res  = document.getElementById('driver-upload-result');
+  if (!file) { res.className = 'upload-error'; res.textContent = 'Please select a file.'; return; }
+  res.className = 'upload-result'; res.textContent = 'Uploading...';
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch('/api/v1/upload-drivers', { method: 'POST', headers: { 'X-API-Key': key }, body: fd });
+    const data = await r.json();
+    res.className = r.ok ? 'upload-result' : 'upload-error';
+    res.textContent = r.ok ? data.message : (data.detail || 'Upload failed.');
+    if (r.ok) refresh();
+  } catch(e) { res.className = 'upload-error'; res.textContent = e.message; }
+}
+
+async function uploadOrders() {
+  const file = document.getElementById('orders-file').files[0];
+  const key  = document.getElementById('api-key-input').value.trim();
+  const res  = document.getElementById('orders-upload-result');
+  if (!file) { res.className = 'upload-error'; res.textContent = 'Please select a file.'; return; }
+  res.className = 'upload-result'; res.textContent = 'Uploading...';
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch('/api/v1/upload-orders', { method: 'POST', headers: { 'X-API-Key': key }, body: fd });
+    const data = await r.json();
+    res.className = r.ok ? 'upload-result' : 'upload-error';
+    res.textContent = r.ok ? data.message : (data.detail || 'Upload failed.');
+    if (r.ok) refresh();
+  } catch(e) { res.className = 'upload-error'; res.textContent = e.message; }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

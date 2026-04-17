@@ -1,0 +1,104 @@
+[
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:29:43.888563",
+    "response_ms": 1.2
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/drivers",
+    "timestamp": "2026-04-17T11:30:42.266162",
+    "response_ms": 10.5
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:30:42.272370",
+    "response_ms": 10.6
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/schedule",
+    "timestamp": "2026-04-17T11:30:42.321236",
+    "response_ms": 5.8
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:30:42.334146",
+    "response_ms": 2.2
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/drivers",
+    "timestamp": "2026-04-17T11:31:44.069636",
+    "response_ms": 19.5
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:31:44.139417",
+    "response_ms": 1.1
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/schedule",
+    "timestamp": "2026-04-17T11:31:44.189933",
+    "response_ms": 7.9
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:31:44.398677",
+    "response_ms": 1.1
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/drivers",
+    "timestamp": "2026-04-17T11:32:42.444679",
+    "response_ms": 15.1
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:32:42.592655",
+    "response_ms": 5.0
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/schedule",
+    "timestamp": "2026-04-17T11:32:42.741736",
+    "response_ms": 9.7
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:32:42.857373",
+    "response_ms": 1.6
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/drivers",
+    "timestamp": "2026-04-17T11:33:42.605061",
+    "response_ms": 13.2
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:33:42.755695",
+    "response_ms": 0.8
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-04-17T11:33:43.112538",
+    "response_ms": 2.6
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/schedule",
+    "timestamp": "2026-04-17T11:33:43.291404",
+    "response_ms": 4.6
+  }
+]

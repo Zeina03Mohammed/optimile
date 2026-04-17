@@ -67,11 +67,6 @@ class AuthWrapper extends StatelessWidget {
 
         final user = snapshot.data!;
 
-        // Email not verified -> force login
-        if (!user.emailVerified) {
-          return const LoginPage();
-        }
-
         // Fetch user role from Firestore
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),

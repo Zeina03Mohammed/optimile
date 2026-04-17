@@ -14,6 +14,8 @@ import 'dart:convert';
 import '../models/stop_model.dart';
 
 class MapVM extends ChangeNotifier {
+  static const String _backendBase = Env.backendBaseUrl;
+
   // ================= SERVICES =================
   final PlacesService _placesService = PlacesService();
   PlacesService get placesService => _placesService;
@@ -77,6 +79,10 @@ bool isFragile = false;
   final Set<Polyline> polylines = {};
 
   bool navigationStarted = false;
+  bool _ordersLoaded = false;   // true after loadDriverOrders zooms to Cairo
+
+  /// lat/lng key → backend order_id — survives stop list rebuilds during optimization
+  final Map<String, String> _coordToOrderId = {};
   String routeStatus = 'idle';
   String distance = '';
   String duration = '';
@@ -593,9 +599,14 @@ void setUseBellmanFord(bool value) {
         ),
       );
 
-    await mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(currentLocation!, 15),
-    );
+    // Only zoom to the GPS location if orders haven't already zoomed the map
+    // to Cairo.  Without this guard the emulator's default GPS (San Jose)
+    // overrides the Cairo zoom that loadDriverOrders just applied.
+    if (!_ordersLoaded) {
+      await mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(currentLocation!, 15),
+      );
+    }
 
     await refreshWeather(force: true);
     _ensureWeatherTimer();
@@ -648,6 +659,124 @@ void addStop(
   _routes[_selectedRouteIndex].stops.add(stop);
   rebuildMap();
 }
+
+  // ================= LOAD DRIVER ORDERS FROM BACKEND =================
+  Future<void> loadDriverOrders(int? driverId) async {
+    if (driverId == null) return;
+
+    try {
+      final uri = Uri.parse(
+        '${_backendBase}/api/v1/orders?driver_id=$driverId',
+      );
+      final response = await http.get(uri, headers: {
+        'X-API-Key': 'opt-demo-key-001',
+      });
+
+      if (response.statusCode != 200) {
+        debugPrint('loadDriverOrders: status ${response.statusCode}');
+        return;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final orders = (data['orders'] as List<dynamic>?) ?? [];
+
+      if (orders.isEmpty) return;
+
+      // Clear existing stops before loading
+      _routes[0].stops.clear();
+      stopTitles.clear();
+      _coordToOrderId.clear();
+
+      for (final order in orders) {
+        final lat = double.tryParse(order['lat']?.toString() ?? '');
+        final lng = double.tryParse(order['lng']?.toString() ?? '');
+        if (lat == null || lng == null) continue;
+
+        final title = '${order['customer_name'] ?? 'Customer'} — ${order['address'] ?? ''}';
+        final isFragile = (order['fragile'] as String?)?.toLowerCase() == 'yes';
+        final orderId = order['order_id']?.toString() ?? '';
+
+        final stop = Stop(
+          id: orderId,
+          location: LatLng(lat, lng),
+          title: title,
+          isFragile: isFragile,
+        );
+
+        _routes[0].stops.add(stop);
+        stopTitles[stop] = title;
+
+        // Keep a coord → orderId lookup so IDs survive optimization rebuilds
+        if (orderId.isNotEmpty) {
+          final key = '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
+          _coordToOrderId[key] = orderId;
+        }
+      }
+
+      addEvent('📦', 'Loaded ${orders.length} orders for driver #$driverId');
+      await rebuildMap();
+
+      // Zoom map to fit all stops
+      if (_routes[0].stops.isNotEmpty && mapController != null) {
+        final lats = _routes[0].stops.map((s) => s.location.latitude);
+        final lngs = _routes[0].stops.map((s) => s.location.longitude);
+        final bounds = LatLngBounds(
+          southwest: LatLng(lats.reduce((a, b) => a < b ? a : b),
+              lngs.reduce((a, b) => a < b ? a : b)),
+          northeast: LatLng(lats.reduce((a, b) => a > b ? a : b),
+              lngs.reduce((a, b) => a > b ? a : b)),
+        );
+        mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
+        _ordersLoaded = true; // lock the camera — GPS must not override this
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('loadDriverOrders error: $e');
+    }
+  }
+
+  // ================= MARK STOP DELIVERED =================
+  Future<void> markCurrentStopDelivered(BuildContext context) async {
+    if (!navigationStarted || stops.isEmpty) return;
+    if (currentStopIndex >= stops.length) return;
+
+    final currentStop = stops[currentStopIndex];
+
+    // stop.id may be empty after optimizeRoute rebuilds the list —
+    // fall back to the coord→orderId map populated during loadDriverOrders
+    String orderId = currentStop.id;
+    if (orderId.isEmpty) {
+      final key =
+          '${currentStop.location.latitude.toStringAsFixed(4)},${currentStop.location.longitude.toStringAsFixed(4)}';
+      orderId = _coordToOrderId[key] ?? '';
+    }
+
+    // Tell the backend this order is delivered
+    if (orderId.isNotEmpty) {
+      try {
+        final uri = Uri.parse('$_backendBase/api/v1/order/$orderId/delivered');
+        await http.patch(uri, headers: {'X-API-Key': 'opt-demo-key-001'});
+      } catch (e) {
+        debugPrint('markDelivered error: $e');
+      }
+    }
+
+    addEvent(
+      '✅',
+      'Delivered: ${stopTitles[currentStop] ?? "Stop ${currentStopIndex + 1}"}',
+    );
+
+    if (currentStopIndex < stops.length - 1) {
+      currentStopIndex++;
+      _updateStopProgress();
+      await rebuildMap();
+      notifyListeners();
+    } else {
+      // Last stop — complete the whole ride
+      await stopRide(context: context, completed: true);
+    }
+  }
 
   void removeStop(int index) {
     if (navigationStarted) return;
@@ -1133,6 +1262,7 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
 
   currentStopIndex = 0;
   navigationStarted = false;
+  _ordersLoaded = false;
   routeStatus = 'idle';
   distance = '';
   duration = '';

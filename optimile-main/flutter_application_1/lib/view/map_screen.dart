@@ -25,15 +25,19 @@ class MapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authVm = Provider.of<AuthViewModel>(context, listen: false);
+    final driverId = authVm.currentDriver?.driverId;
+
     return ChangeNotifierProvider(
       create: (_) => MapVM()..goToCurrentLocation(),
-      child: const _MapView(),
+      child: _MapView(driverId: driverId),
     );
   }
 }
 
 class _MapView extends StatelessWidget {
-  const _MapView();
+  final int? driverId;
+  const _MapView({this.driverId});
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +56,15 @@ class _MapView extends StatelessWidget {
             markers: vm.markers,
             polylines: vm.polylines,
             myLocationEnabled: true,
-            onMapCreated: (c) => vm.mapController = c,
+            onMapCreated: (c) {
+              vm.mapController = c;
+              // Load orders after map is ready so camera zoom to Cairo works
+              if (driverId != null) {
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  vm.loadDriverOrders(driverId);
+                });
+              }
+            },
             onTap: (latLng) async {
               // Unified stop configuration: fragile + time window
               final config = await vm.showStopConfigDialog(context);
@@ -96,6 +108,15 @@ class _MapView extends StatelessWidget {
               ),
             ),
           ),
+
+          // ── DRIVER GREETING BANNER ──
+          if (!vm.showSearchBar && !vm.navigationStarted)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 65,
+              right: 65,
+              child: _GreetingBanner(),
+            ),
 
           if (vm.showSearchBar)
             Positioned(
@@ -526,11 +547,22 @@ class _MapView extends StatelessWidget {
                         ],
                         if (vm.navigationStarted) ...[
                           Expanded(
-                            child: OutlinedButton(
-                              onPressed: () async =>
-                                  await vm.stopRide(context: context),
-                              child: const Text("Exit"),
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () =>
+                                  vm.markCurrentStopDelivered(context),
+                              icon: const Icon(Icons.check_circle, size: 18),
+                              label: const Text("Mark Delivered"),
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: () async =>
+                                await vm.stopRide(context: context),
+                            child: const Text("Exit"),
                           ),
                         ],
                       ],
@@ -780,10 +812,10 @@ class _MapView extends StatelessWidget {
               style: TextStyle(color: Colors.white),
             ),
             onTap: () async {
-    final authVM =
-        Provider.of<AuthViewModel>(context, listen: false);
-
-    await authVM.logout();
+              final authVM =
+                  Provider.of<AuthViewModel>(context, listen: false);
+              Navigator.of(context).pop(); // close drawer first
+              await authVM.logout();
             },
           ),
         ],
@@ -879,6 +911,79 @@ class _WeatherChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── GREETING BANNER ──────────────────────────────────────────────────
+class _GreetingBanner extends StatelessWidget {
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authVm = Provider.of<AuthViewModel>(context, listen: false);
+    final driver = authVm.currentDriver;
+    if (driver == null) return const SizedBox.shrink();
+
+    final firstName = driver.name.split(' ').first;
+    final vm = context.watch<MapVM>();
+    final stopCount = vm.currentStops.length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('👋', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '${_greeting()}, $firstName!',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (stopCount > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                '$stopCount stops',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
