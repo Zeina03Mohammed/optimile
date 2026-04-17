@@ -17,7 +17,9 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController phoneController = TextEditingController();
 
   bool _obscurePassword = true;
-  bool _isDriver = true; // 🔹 Default to driver
+
+  // 🔥 DEFAULT = CUSTOMER
+  bool _isDriver = false;
 
   void _showSnack(String message, [Color color = Colors.red]) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -29,13 +31,11 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // Email validation
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     return emailRegex.hasMatch(email);
   }
 
-  // Password validation
   String? _validatePassword(String password) {
     if (password.length < 6) {
       return 'Password must be at least 6 characters';
@@ -52,7 +52,6 @@ class _SignupPageState extends State<SignupPage> {
   void signup() async {
     final authVM = Provider.of<AuthViewModel>(context, listen: false);
 
-    // Validation
     if (nameController.text.isEmpty ||
         emailController.text.isEmpty ||
         passwordController.text.isEmpty) {
@@ -60,13 +59,11 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
-    // Email validation
     if (!_isValidEmail(emailController.text.trim())) {
       _showSnack("Please enter a valid email address");
       return;
     }
 
-    // Password validation
     final passwordError = _validatePassword(passwordController.text);
     if (passwordError != null) {
       _showSnack(passwordError);
@@ -77,17 +74,21 @@ class _SignupPageState extends State<SignupPage> {
       name: nameController.text.trim(),
       email: emailController.text.trim(),
       password: passwordController.text,
-      phone: phoneController.text.isEmpty ? null : phoneController.text.trim(),
-      role: _isDriver ? 'driver' : 'user', // 🔹 Pass role based on checkbox
+      phone: phoneController.text.isEmpty
+          ? null
+          : phoneController.text.trim(),
+
+      // 🔥 FINAL ROLE LOGIC
+      role: _isDriver ? 'driver' : 'customer',
     );
 
     if (result != null) {
-      // error message returned
       _showSnack(result);
     } else {
-      // success
-      _showSnack("Account created successfully! Please verify your email.",
-          Colors.green);
+      _showSnack(
+        "Account created successfully! Please verify your email.",
+        Colors.green,
+      );
       Navigator.pop(context, emailController.text.trim());
     }
   }
@@ -142,7 +143,6 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 32),
 
-                            // Name
                             TextField(
                               controller: nameController,
                               decoration: InputDecoration(
@@ -157,7 +157,6 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Email
                             TextField(
                               controller: emailController,
                               keyboardType: TextInputType.emailAddress,
@@ -173,7 +172,6 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Phone (optional)
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
@@ -189,7 +187,6 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Password
                             TextField(
                               controller: passwordController,
                               obscureText: _obscurePassword,
@@ -213,63 +210,35 @@ class _SignupPageState extends State<SignupPage> {
                                 ),
                                 filled: true,
                                 fillColor: Colors.grey.shade50,
-                                helperText:
-                                    'Min 6 chars, 1 uppercase, 1 number',
-                                helperMaxLines: 2,
                               ),
                             ),
                             const SizedBox(height: 16),
 
-                            // 🔹 Driver Checkbox
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade400),
+                            // ✅ CHECKBOX ONLY (FINAL)
+                            CheckboxListTile(
+                              title: const Text("I am a driver"),
+                              subtitle: Text(
+                                _isDriver
+                                    ? "Registering as Driver"
+                                    : "Registering as Customer",
+                                style: const TextStyle(fontSize: 12),
                               ),
-                              child: CheckboxListTile(
-                                title: const Row(
-                                  children: [
-                                    Icon(Icons.local_shipping, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('I am a driver'),
-                                  ],
-                                ),
-                                value: _isDriver,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _isDriver = value ?? true;
-                                  });
-                                },
-                                activeColor: Colors.blue.shade700,
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                              ),
+                              value: _isDriver,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isDriver = value ?? false;
+                                });
+                              },
+                              activeColor: Colors.blue,
                             ),
+
                             const SizedBox(height: 24),
 
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton(
-                                onPressed: isLoading ? null : signup,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue.shade700,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: isLoading
-                                    ? const CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      )
-                                    : const Text(
-                                        'Sign Up',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                              ),
+                            ElevatedButton(
+                              onPressed: isLoading ? null : signup,
+                              child: isLoading
+                                  ? const CircularProgressIndicator()
+                                  : const Text("Sign Up"),
                             ),
 
                             const SizedBox(height: 16),
@@ -277,8 +246,9 @@ class _SignupPageState extends State<SignupPage> {
                             TextButton(
                               onPressed: () => Navigator.pop(context),
                               child: const Text(
-                                  'Already have an account? Sign In',
-                                  style: TextStyle(color: Colors.white)),
+                                "Already have an account? Sign In",
+                                style: TextStyle(color: Colors.white),
+                              ),
                             ),
                           ],
                         ),

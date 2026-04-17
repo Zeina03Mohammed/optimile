@@ -10,6 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    
+  file_picker: ^8.0.0
+  csv: ^5.0.2
 
 
   http: ^1.1.0
@@ -37,3 +40,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/data/deliveries.csv

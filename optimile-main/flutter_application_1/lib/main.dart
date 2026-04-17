@@ -9,18 +9,14 @@ import 'firebase_options.dart';
 import 'viewmodel/authvm.dart';
 import 'view/login.dart';
 import 'view/map_screen.dart';
-// import 'view/admin.dart'; // ❌ REMOVE (we won’t open Flutter admin page)
+import 'view/customer_home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e, st) {
-    debugPrint("Firebase init error: $e\n$st");
-    rethrow;
-  }
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MyApp());
 }
 
@@ -44,7 +40,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Auth Wrapper - Handles automatic login based on auth state
+// ================= AUTH WRAPPER =================
+
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -53,14 +50,15 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Loading while checking auth state
+
+        // 🔄 Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // Not logged in
+        // ❌ Not logged in → Login Page
         if (!snapshot.hasData || snapshot.data == null) {
           return const LoginPage();
         }
@@ -69,35 +67,53 @@ class AuthWrapper extends StatelessWidget {
 
         // Fetch user role from Firestore
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(),
           builder: (context, userDoc) {
+
+            // 🔄 Loading
             if (userDoc.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
 
-            if (userDoc.hasError || !userDoc.hasData || userDoc.data == null) {
+            // ❌ Error or no data → back to login
+            if (userDoc.hasError ||
+                !userDoc.hasData ||
+                userDoc.data == null) {
               return const LoginPage();
             }
 
-            final userData = userDoc.data!.data() as Map<String, dynamic>?;
-            if (userData == null) {
+            final data =
+                userDoc.data!.data() as Map<String, dynamic>?;
+
+            if (data == null) {
               return const LoginPage();
             }
 
-            final role = (userData['role'] ?? 'driver')
-                .toString()
-                .toLowerCase()
-                .trim();
+            final role =
+                (data['role'] ?? '').toString().toLowerCase().trim();
 
-            // ✅ Admin -> go to login page (then login.dart will open web dashboard)
+            // 👑 ADMIN
             if (role == 'admin') {
-              return LoginPage(prefilledEmail: user.email);
+              return const LoginPage(); // change later if needed
             }
 
-            // ✅ Driver -> Map screen
-            return const MapScreen();
+            // 🚚 DRIVER
+            if (role == 'driver') {
+              return const MapScreen();
+            }
+
+            // 🧑 CUSTOMER
+            if (role == 'customer') {
+              return const CustomerHomePage();
+            }
+
+            // ❌ Unknown role
+            return const LoginPage();
           },
         );
       },
