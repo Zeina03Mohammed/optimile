@@ -168,11 +168,48 @@ const List<Color> kRouteColors = [
   Colors.teal,
 ];
 
-/// A single entry in the real-time event log.
-class EventLogEntry {
-  final String icon;
-  final String message;
-  final String time;
+// ─────────────────────────────────────────────────────────────────────────────
+// XAI — Explainable AI  (EU AI Act Art. 13 + Contrastive XAI, Miller 2018)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  EventLogEntry({required this.icon, required this.message, required this.time});
+/// Semantic category of a system decision — drives colour coding in the UI.
+enum XaiCategory {
+  optimization, // route order change by ALNS / Bellman-Ford
+  hazard,       // road hazard detected (OSM)
+  weather,      // weather-triggered reroute
+  deviation,    // driver went off-route
+  fleet,        // multi-vehicle stop transfer
+  info,         // neutral status update
+}
+
+/// A single structured entry in the real-time XAI event log.
+///
+/// Fields follow the Contrastive Explanation schema (Miller 2018):
+///   WHY this happened  →  [trigger] + [evidence]
+///   WHAT was decided   →  [decision] + [method]
+///   HOW certain        →  [confidence]
+///   HOW MUCH it helped →  [impactMin] (minutes saved, positive = improvement)
+///   WHAT IF NOT        →  [counterfactual] (plain-language "without this…")
+class EventLogEntry {
+  final String      icon;
+  final String      message;       // human-readable summary (always present)
+  final String      time;
+
+  // ── structured XAI fields ─────────────────────────────────────────────────
+  final XaiCategory category;
+  final double?     confidence;    // 0.0 – 1.0  (model + algorithm certainty)
+  final double?     impactMin;     // minutes saved (>0 = better, <0 = worse)
+  final String?     counterfactual; // "Without this action, ETA would be +X min"
+  final String?     causalChain;   // "Event → Decision → Outcome" one-liner
+
+  EventLogEntry({
+    required this.icon,
+    required this.message,
+    required this.time,
+    this.category      = XaiCategory.info,
+    this.confidence,
+    this.impactMin,
+    this.counterfactual,
+    this.causalChain,
+  });
 }

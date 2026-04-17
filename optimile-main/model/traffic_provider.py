@@ -1,125 +1,129 @@
 from __future__ import annotations
 
 """
-Live traffic / incident provider integration.
+Live road hazard provider — OSM Overpass API (no API key required).
 
-This module is intentionally small and replaceable. At runtime it should
-call a REAL traffic / incident API (e.g. TomTom, HERE, Google Routes).
-
-We keep the interface simple:
-
-    fetch_incidents_along_route(coords) -> List[dict]
-
-Where each returned dict is compatible with the backend Incident model:
-    {
-        "index": int,          # stop index in the coords list (>= 1)
-        "kind": "traffic_jam" | "accident" | "road_closed",
-        "severity": float,     # 0..1+
-    }
+Mirrors the logic in flutter_application_1/lib/services/road_hazard_service.dart.
+Detects physical road hazards (flood-prone roads, fords, tunnels, unpaved
+surfaces) from OpenStreetMap data and maps them to the nearest downstream stop.
 """
 
-import os
+import requests
 from typing import List, Dict, Tuple
 
-import requests
+
+_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+_TIMEOUT_S    = 10
 
 
-def _bbox_for_coords(coords: List[Tuple[float, float]]) -> Tuple[float, float, float, float]:
+def _bbox(coords: List[Tuple[float, float]], pad: float = 0.04):
     lats = [c[0] for c in coords]
     lngs = [c[1] for c in coords]
-    return min(lats), min(lngs), max(lats), max(lngs)
+    return min(lats) - pad, min(lngs) - pad, max(lats) + pad, max(lngs) + pad
+
+
+def _dist2(lat1, lng1, lat2, lng2) -> float:
+    return (lat1 - lat2) ** 2 + (lng1 - lng2) ** 2
 
 
 def fetch_incidents_along_route(coords: List[Tuple[float, float]]) -> List[Dict]:
     """
-    Query a real traffic incident API for a bounding box that covers
-    the current route and map the response to our Incident objects.
+    Query OSM Overpass for road hazards inside the bounding box of the
+    current route and map each hazard to the nearest downstream stop.
 
-    This implementation uses the TomTom Traffic Incidents API as an
-    example. You must set the TOMTOM_API_KEY environment variable
-    in your runtime for this to be active.
+    Returns a list of incident dicts compatible with the backend Incident model:
+        {"index": int, "kind": "traffic_jam"|"road_closed", "severity": float}
     """
-    api_key = os.getenv("TOMTOM_API_KEY")
-    if not api_key or len(coords) < 2:
-        # No live key configured -> no automatic incidents
+    if len(coords) < 2:
         return []
 
-    south, west, north, east = _bbox_for_coords(coords)
-    # TomTom bbox: minLon, minLat, maxLon, maxLat (longitude first)
-    bbox = f"{west},{south},{east},{north}"
+    s, w, n, e = _bbox(coords)
 
-    # See: https://developer.tomtom.com/traffic-api/documentation/traffic-incidents
-    url = "https://api.tomtom.com/traffic/services/5/incidentDetails"
-    params = {
-        "bbox": bbox,
-        "key": api_key,
-        "fields": "id,geometry,properties{iconCategory,magnitudeOfDelay,incidentCategory}",
-        "language": "en-GB",
-    }
+    query = f"""
+[out:json][timeout:9];
+(
+  way["flood_prone"="yes"]({s},{w},{n},{e});
+  way["highway"="ford"]({s},{w},{n},{e});
+  way["tunnel"="yes"]({s},{w},{n},{e});
+  way["surface"~"^(unpaved|dirt|gravel|mud|sand|ground|grass)$"]({s},{w},{n},{e});
+  node["ford"="yes"]({s},{w},{n},{e});
+);
+out center tags;
+"""
 
     try:
-        resp = requests.get(url, params=params, timeout=2.5)
+        resp = requests.post(
+            _OVERPASS_URL,
+            data=query,
+            headers={"Content-Type": "text/plain"},
+            timeout=_TIMEOUT_S,
+        )
         resp.raise_for_status()
+        elements = resp.json().get("elements", []) or []
     except Exception as exc:
-        # Never break optimization because the traffic API failed
-        print(f"[TRAFFIC] incident API error: {exc}")
+        print(f"[TRAFFIC] OSM Overpass error: {exc}")
         return []
-
-    data = resp.json()
-    incidents_raw = data.get("incidents", []) or []
 
     mapped: List[Dict] = []
 
-    for inc in incidents_raw:
-        props = inc.get("properties", {}) or {}
-        mag = float(props.get("magnitudeOfDelay", 0.0) or 0.0)
-        cat = str(props.get("incidentCategory", "") or "").lower()
+    for el in elements:
+        tags = el.get("tags") or {}
 
-        # Map provider-specific categories to our internal ones
-        if "accident" in cat:
-            kind = "accident"
-        elif "road" in cat and "closed" in cat:
-            kind = "road_closed"
+        # node has lat/lon directly; way exposes a center object
+        if "lat" in el:
+            lat_i, lng_i = float(el["lat"]), float(el["lon"])
         else:
-            kind = "traffic_jam"
+            center = el.get("center") or {}
+            if not center:
+                continue
+            lat_i, lng_i = float(center["lat"]), float(center["lon"])
 
-        # crude nearest-stop mapping: pick the closest stop index >= 1
-        geom = inc.get("geometry", {}) or {}
-        points = geom.get("coordinates") or []
-        if not points:
-            continue
+        kind, severity = _classify(tags)
 
-        # TomTom coordinates are [lng, lat]; pick first point
-        first_point = points[0]
-        if not isinstance(first_point, (list, tuple)) or len(first_point) < 2:
-            continue
-        lng_i, lat_i = float(first_point[0]), float(first_point[1])
-
-        best_idx = None
-        best_dist2 = None
+        # Map to nearest downstream stop (skip index 0 = vehicle position)
+        best_idx, best_d2 = None, None
         for idx, (lat, lng) in enumerate(coords):
             if idx == 0:
-                # idx 0 is vehicle position; we only penalize downstream stops
                 continue
-            d2 = (lat - lat_i) ** 2 + (lng - lng_i) ** 2
-            if best_idx is None or d2 < best_dist2:
-                best_idx = idx
-                best_dist2 = d2
+            d2 = _dist2(lat, lng, lat_i, lng_i)
+            if best_idx is None or d2 < best_d2:
+                best_idx, best_d2 = idx, d2
 
         if best_idx is None:
             continue
 
-        severity = max(0.1, min(1.0, mag / 5.0))
-        mapped.append(
-            {
-                "index": int(best_idx),
-                "kind": kind,
-                "severity": float(severity),
-            }
-        )
+        mapped.append({
+            "index":    int(best_idx),
+            "kind":     kind,
+            "severity": float(severity),
+        })
 
     if mapped:
-        print(f"[TRAFFIC] live incidents mapped={mapped}")
+        print(f"[TRAFFIC] OSM hazards mapped={mapped}")
 
     return mapped
 
+
+def _classify(tags: dict) -> Tuple[str, float]:
+    """Map OSM tags to (incident_kind, severity 0..1)."""
+    if tags.get("flood_prone") == "yes":
+        return "road_closed", 0.85
+    if tags.get("highway") == "ford" or tags.get("ford") == "yes":
+        return "road_closed", 0.90
+    if tags.get("tunnel") == "yes":
+        return "traffic_jam", 0.50
+
+    surface_map = {
+        "mud":     ("road_closed", 0.85),
+        "sand":    ("traffic_jam", 0.70),
+        "gravel":  ("traffic_jam", 0.45),
+        "dirt":    ("traffic_jam", 0.55),
+        "ground":  ("traffic_jam", 0.55),
+        "grass":   ("traffic_jam", 0.50),
+        "unpaved": ("traffic_jam", 0.55),
+    }
+    surface = tags.get("surface", "")
+    if surface in surface_map:
+        return surface_map[surface]
+
+    return "traffic_jam", 0.35

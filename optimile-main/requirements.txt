@@ -6,3 +6,8 @@ numpy>=1.26.2
 scikit-learn>=1.3.2
 joblib>=1.3.2
 requests>=2.31.0
+
+# ML pipeline (route cost calibration from real driver data)
+# scikit-learn already covers: LinearRegression, Ridge, RandomForest,
+# GradientBoosting, HistGradientBoosting, DBSCAN, KFold, cross_validate
+# No extra packages needed beyond what is already listed above.

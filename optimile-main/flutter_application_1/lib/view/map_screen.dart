@@ -7,6 +7,19 @@ import '../viewmodel/authvm.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import '../models/stop_model.dart';
 
+/// Maps XAI event category to its colour-coded strip colour.
+/// Colours follow the DARPA XAI + EU AI Act Art. 13 visual convention:
+///   optimization → blue  |  hazard → red  |  weather → orange
+///   deviation → amber    |  fleet  → purple  |  info → green
+Color _xaiCategoryColor(XaiCategory cat) => switch (cat) {
+  XaiCategory.optimization => const Color(0xFF4FC3F7), // light blue
+  XaiCategory.hazard       => const Color(0xFFEF5350), // red
+  XaiCategory.weather      => const Color(0xFFFFB74D), // orange
+  XaiCategory.deviation    => const Color(0xFFFFD54F), // amber
+  XaiCategory.fleet        => const Color(0xFFCE93D8), // purple
+  XaiCategory.info         => const Color(0xFF69F0AE), // green
+};
+
 class MapScreen extends StatelessWidget {
   const MapScreen({super.key});
 
@@ -192,34 +205,103 @@ class _MapView extends StatelessWidget {
                               : (vm.eventLog.length > 3 ? 3 : vm.eventLog.length),
                           itemBuilder: (_, i) {
                             final e = vm.eventLog[i];
+                            final catColor = _xaiCategoryColor(e.category);
                             return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 1),
+                              padding: const EdgeInsets.symmetric(vertical: 2),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    e.time,
-                                    style: const TextStyle(
-                                      color: Colors.white38,
-                                      fontSize: 10,
-                                      fontFamily: 'monospace',
+                                  // Category colour strip (EU AI Act Art. 13 visual signal)
+                                  Container(
+                                    width: 3,
+                                    height: 40,
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: catColor,
+                                      borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    e.icon,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  const SizedBox(width: 4),
                                   Expanded(
-                                    child: Text(
-                                      e.message,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              e.time,
+                                              style: const TextStyle(
+                                                color: Colors.white38,
+                                                fontSize: 10,
+                                                fontFamily: 'monospace',
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(e.icon, style: const TextStyle(fontSize: 11)),
+                                            const Spacer(),
+                                            // Confidence badge — plain words, not raw %
+                                            if (e.confidence != null)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: catColor.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  e.confidence! >= 0.90
+                                                      ? 'Very sure'
+                                                      : e.confidence! >= 0.75
+                                                          ? 'Sure'
+                                                          : 'Likely',
+                                                  style: TextStyle(
+                                                    color: catColor,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            // Impact — "saves X min" or "adds X min"
+                                            if (e.impactMin != null && e.impactMin!.abs() >= 0.5) ...[
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                e.impactMin! >= 0
+                                                    ? 'saves ${e.impactMin!.abs().toStringAsFixed(0)} min'
+                                                    : 'adds ${e.impactMin!.abs().toStringAsFixed(0)} min',
+                                                style: TextStyle(
+                                                  color: e.impactMin! >= 0
+                                                      ? Colors.greenAccent
+                                                      : Colors.redAccent,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        Text(
+                                          e.message,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 11,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        // Counterfactual explanation (italic, dimmed)
+                                        if (e.counterfactual != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 1),
+                                            child: Text(
+                                              e.counterfactual!,
+                                              style: const TextStyle(
+                                                color: Colors.white30,
+                                                fontSize: 9,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ],

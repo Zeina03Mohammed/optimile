@@ -1,0 +1,25 @@
+{
+  "model_name": "RandomForest",
+  "holdout_mae": 11.245,
+  "holdout_rmse": 15.502,
+  "holdout_r2": 0.3025,
+  "cv_mae_mean": 10.508,
+  "cv_mae_std": 1.035,
+  "n_segments": 590,
+  "n_folds": 5,
+  "feature_names": [
+    "distance_km",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos",
+    "month",
+    "stop_index",
+    "stops_in_route",
+    "stops_remaining",
+    "route_progress",
+    "is_same_cluster",
+    "bearing_deg",
+    "cluster_dest_cat"
+  ]
+}

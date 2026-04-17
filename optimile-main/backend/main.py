@@ -356,7 +356,19 @@ def optimize(req: OptimizeRequest):
         "weather": req.weather,
         "order_minutes": start_time,
         "day_of_week": dt.weekday(),
+        "use_ml_cost": True,   # uncomment to enable ML-calibrated leg times
     }
+
+    # Pre-compute ML cost matrix once per request (N² predictions up front,
+    # then O(1) lookup inside the ALNS loop — avoids 20k model calls).
+    try:
+        from ml_pipeline.predictor import predict_cost_matrix, is_model_available
+        if context.get("use_ml_cost") and is_model_available():
+            ml_matrix = predict_cost_matrix(stop_coords, float(start_time))
+            if ml_matrix is not None:
+                context["ml_cost_matrix"] = ml_matrix.tolist()
+    except Exception:
+        pass  # ML unavailable — ALNS runs on formula cost as before
 
     # optional single incident – pick the most severe if provided
     if req.incidents:
@@ -548,10 +560,24 @@ def reoptimize(req: ReoptimizeRequest):
         "weather": req.weather,
         "order_minutes": start_time,
         "day_of_week": now.weekday(),
+        "use_ml_cost": True,   # uncomment to enable ML-calibrated leg times
     }
 
+    # Pre-compute ML cost matrix once (current position + remaining stops)
+    try:
+        from ml_pipeline.predictor import predict_cost_matrix, is_model_available
+        if context.get("use_ml_cost") and is_model_available():
+            ml_matrix = predict_cost_matrix(
+                [(req.current_lat, req.current_lng)] + [(s.lat, s.lng) for s in req.remaining_stops],
+                float(start_time),
+            )
+            if ml_matrix is not None:
+                context["ml_cost_matrix"] = ml_matrix.tolist()
+    except Exception:
+        pass
+
     # ALNS + TRUE Bellman–Ford reoptimize: BF (with negative edge weights) provides
-    # initial order, ALNS refines it (with TomTom incidents)
+    # initial order, ALNS refines it (with OSM road hazard incidents)
     if req.use_bellman_ford:
         if not req.remaining_stops:
             return {"rerouted": False}
@@ -589,7 +615,7 @@ def reoptimize(req: ReoptimizeRequest):
         # 2) Initial route for ALNS: [0] = current position, then remaining in BF order
         initial_route = [0] + [i + 1 for i in bf_order_remaining]
 
-        # 3) Incident context (TomTom + request incidents), same as ALNS branch
+        # 3) Incident context (OSM hazards + request incidents), same as ALNS branch
         live_incidents = fetch_incidents_along_route(coords)
         candidate_incidents = []
         if req.incidents:
@@ -638,7 +664,7 @@ def reoptimize(req: ReoptimizeRequest):
             f"reason={req.reason} n_remaining={len(req.remaining_stops)} "
             f"bf_weights={'google' if bf_used_google else 'haversine'} "
             f"negative_edges={neg_edges} "
-            f"tomtom_incidents={len(live_incidents)} "
+            f"osm_incidents={len(live_incidents)} "
             f"baseline_cost={baseline_cost:.3f} optimized_cost={cost:.3f}"
         )
         response = {
@@ -684,7 +710,7 @@ def reoptimize(req: ReoptimizeRequest):
 
     # build real-time incident context from:
     #  - explicit incidents (mobile reports)
-    #  - live provider API (TomTom example)
+    #  - live provider API (OSM Overpass)
     #  - high-level reason / severity
     incident_ctx = None
 
@@ -722,7 +748,18 @@ def reoptimize(req: ReoptimizeRequest):
         "weather": req.weather,
         "order_minutes": start_time,
         "day_of_week": now.weekday(),
+        "use_ml_cost": True,   # uncomment to enable ML-calibrated leg times
     }
+
+    # Pre-compute ML cost matrix once (current position + remaining stops)
+    try:
+        from ml_pipeline.predictor import predict_cost_matrix, is_model_available
+        if context.get("use_ml_cost") and is_model_available():
+            ml_matrix = predict_cost_matrix(coords, float(start_time))
+            if ml_matrix is not None:
+                context["ml_cost_matrix"] = ml_matrix.tolist()
+    except Exception:
+        pass
 
     if incident_ctx:
         context["incident"] = incident_ctx

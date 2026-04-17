@@ -2,6 +2,15 @@ import random
 import math
 from functools import lru_cache
 
+# ML predictor is optional — imported lazily so ALNS works even when
+# the model has not been trained yet.
+try:
+    from ml_pipeline.predictor import predict_leg_time as _ml_predict_leg_time
+    _ML_AVAILABLE = True
+except ImportError:
+    _ML_AVAILABLE = False
+    _ml_predict_leg_time = None
+
 # =====================================================
 # GEOMETRY
 # =====================================================
@@ -72,11 +81,35 @@ def route_cost(
         # -------------------------------------------------
         # Base travel time (ETA minutes)
         # -------------------------------------------------
-        # NOTE: distance here is an intermediate quantity.
-        # The *proof* of optimization quality is based on
-        # ETA (minutes), not on geometric distance.
+        # ML-HYBRID PATH: use the data-driven inter-stop time predictor
+        # when a trained model is available and the coordinates are real
+        # (lat/lng), falling back to the formula-based estimate otherwise.
+        #
+        # ML prediction already captures historical speed patterns for
+        # Egyptian delivery routes.  Traffic multiplier is applied on top
+        # with a 50 % weight so we don't double-count: the model saw real
+        # traffic implicitly; we only nudge for current deviations.
         leg_dist = dist(a, b)
-        travel_time = (leg_dist / speed) * traffic_multiplier
+        formula_time = (leg_dist / speed) * traffic_multiplier
+
+        # ML-HYBRID PATH:
+        # The pre-computed N×N matrix (built once per request in main.py)
+        # is looked up here in O(1) — no model call inside the hot loop.
+        # If the matrix was not pre-computed, fall back to the formula.
+        ml_time = None
+        ml_matrix = context.get("ml_cost_matrix")
+        if ml_matrix is not None:
+            from_idx = route[i]
+            to_idx   = route[i + 1]
+            val = ml_matrix[from_idx][to_idx]
+            if 0.5 <= val <= 90.0:
+                ml_time = val
+
+        if ml_time is not None:
+            traffic_delta = traffic_multiplier - 1.0
+            travel_time = ml_time * (1.0 + traffic_delta * 0.5)
+        else:
+            travel_time = formula_time
 
         time += travel_time
         cost += travel_time
@@ -266,6 +299,10 @@ def optimize_route(
     explain: bool = False,
 ):
     n = len(coords)
+    # Guard: nothing to optimize for 0 or 1 stops
+    if n <= 1:
+        return list(range(n)), 0.0
+
     if initial_route is not None and len(initial_route) == n and set(initial_route) == set(range(n)):
         best = list(initial_route)
     else:
@@ -396,7 +433,20 @@ def explain_route(
         b = coords[to_idx]
 
         leg_dist = dist(a, b)
-        base_travel = (leg_dist / speed) * traffic_multiplier
+        formula_travel = (leg_dist / speed) * traffic_multiplier
+
+        # ML hybrid (mirrors route_cost logic — O(1) matrix lookup)
+        ml_travel = None
+        ml_matrix = context.get("ml_cost_matrix")
+        if ml_matrix is not None:
+            val = ml_matrix[from_idx][to_idx]
+            if 0.5 <= val <= 90.0:
+                ml_travel = val
+        if ml_travel is not None:
+            traffic_delta = traffic_multiplier - 1.0
+            base_travel = ml_travel * (1.0 + traffic_delta * 0.5)
+        else:
+            base_travel = formula_travel
 
         wait_pen = 0.0
         late_pen = 0.0
