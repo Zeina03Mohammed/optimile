@@ -263,7 +263,7 @@ class DashboardPage extends StatelessWidget {
     return Container(
       color: const Color(0xFFF2F3F7),
       child: StreamBuilder<QuerySnapshot>(
-        stream: db.collection("packages").snapshots(),
+        stream: db.collection("deliveries").snapshots(),
         builder: (context, packageSnap) {
           return StreamBuilder<QuerySnapshot>(
             stream: db.collection("users").snapshots(),
@@ -272,14 +272,14 @@ class DashboardPage extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final packageDocs = packageSnap.data!.docs;
+              final deliveryDocs = packageSnap.data!.docs;
               final userDocs = userSnap.data!.docs;
 
-              final int totalPackages = packageDocs.length;
-              final int delivered = packageDocs
+              final int totalPackages = deliveryDocs.length;
+              final int delivered = deliveryDocs
                   .where((e) => (e['status'] ?? '') == 'delivered')
                   .length;
-              final int pending = packageDocs
+              final int pending = deliveryDocs
                   .where((e) => (e['status'] ?? '') == 'pending')
                   .length;
               final int drivers = userDocs
@@ -311,7 +311,7 @@ class DashboardPage extends StatelessWidget {
                     ),
                     statCard(
                       icon: Icons.bar_chart,
-                      title: "Packages",
+                      title: "deliveries",
                       value: totalPackages,
                       color: const Color(0xFF5BCD5C),
                     ),

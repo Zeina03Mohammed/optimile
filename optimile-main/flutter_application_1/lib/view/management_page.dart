@@ -14,19 +14,38 @@ class _ManagementPageState extends State<ManagementPage> {
   String selectedCollection = "users";
   String selectedId = "";
 
+  final TextEditingController searchController = TextEditingController();
+
   // ================= SELECT COLLECTION =================
   Widget collectionSelector() {
     return DropdownButtonFormField<String>(
       value: selectedCollection,
       items: const [
         DropdownMenuItem(value: "users", child: Text("Users")),
-        DropdownMenuItem(value: "packages", child: Text("Packages")),
+        DropdownMenuItem(value: "deliveries", child: Text("Deliveries")), // 🔥 FIX
       ],
       onChanged: (v) {
         setState(() {
           selectedCollection = v!;
           selectedId = "";
+          searchController.clear();
         });
+      },
+    );
+  }
+
+  // ================= SEARCH =================
+  Widget searchField() {
+    if (selectedCollection != "deliveries") return const SizedBox();
+
+    return TextField(
+      controller: searchController,
+      decoration: const InputDecoration(
+        labelText: "Search by Delivery ID",
+        prefixIcon: Icon(Icons.search),
+      ),
+      onChanged: (v) {
+        setState(() {});
       },
     );
   }
@@ -40,7 +59,16 @@ class _ManagementPageState extends State<ManagementPage> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final docs = snap.data!.docs;
+        var docs = snap.data!.docs;
+
+        // 🔥 FILTER BY ID (SEARCH)
+        if (selectedCollection == "deliveries" &&
+            searchController.text.isNotEmpty) {
+          docs = docs
+              .where((e) =>
+                  e.id.toLowerCase().contains(searchController.text.toLowerCase()))
+              .toList();
+        }
 
         if (docs.isEmpty) {
           return const Text("No data found");
@@ -49,16 +77,18 @@ class _ManagementPageState extends State<ManagementPage> {
         return DropdownButtonFormField<String>(
           isExpanded: true,
           hint: const Text("Select item"),
-
-          // ✅ FIX dropdown crash
           value: docs.any((e) => e.id == selectedId) ? selectedId : null,
-
           items: docs.map((e) {
             final data = e.data() as Map<String, dynamic>;
 
-            String title = selectedCollection == "users"
-                ? "${data['name'] ?? 'No name'} (${data['role'] ?? ''})"
-                : data['customer_name'] ?? "Package";
+            String title;
+
+            if (selectedCollection == "users") {
+              title =
+                  "${data['name'] ?? 'No name'} (${data['role'] ?? ''})";
+            } else {
+              title = e.id; // 🔥 SHOW DELIVERY ID
+            }
 
             return DropdownMenuItem(
               value: e.id,
@@ -77,6 +107,8 @@ class _ManagementPageState extends State<ManagementPage> {
 
   // ================= ADD =================
   void addItem() {
+    if (selectedCollection != "users") return; // 🔥 DISABLE FOR DELIVERIES
+
     showDialog(
       context: context,
       builder: (_) {
@@ -101,9 +133,6 @@ class _ManagementPageState extends State<ManagementPage> {
                         controller: email,
                         decoration: const InputDecoration(labelText: "Email")),
 
-                    const SizedBox(height: 10),
-
-                    // 🔥 ROLE SELECTOR
                     DropdownButtonFormField<String>(
                       value: role,
                       items: const [
@@ -120,9 +149,6 @@ class _ManagementPageState extends State<ManagementPage> {
                       },
                     ),
 
-                    const SizedBox(height: 10),
-
-                    // ✅ AREA ONLY FOR DRIVER
                     if (role == "driver")
                       TextField(
                         controller: area,
@@ -130,7 +156,6 @@ class _ManagementPageState extends State<ManagementPage> {
                             const InputDecoration(labelText: "Area"),
                       ),
 
-                    // ✅ VEHICLE ONLY FOR DRIVER
                     if (role == "driver")
                       DropdownButtonFormField<String>(
                         value: vehicle,
@@ -161,7 +186,6 @@ class _ManagementPageState extends State<ManagementPage> {
                       "created_at": Timestamp.now(),
                     };
 
-                    // ✅ ADD DRIVER DATA ONLY
                     if (role == "driver") {
                       data["area"] = area.text;
                       data["vehicle"] = vehicle;
@@ -177,59 +201,6 @@ class _ManagementPageState extends State<ManagementPage> {
               ],
             );
           },
-        );
-      },
-    );
-  }
-
-  // ================= EDIT =================
-  void editItem() async {
-    if (selectedId.isEmpty) return;
-
-    final doc =
-        await db.collection(selectedCollection).doc(selectedId).get();
-
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    final name = TextEditingController(text: data['name'] ?? '');
-    final email = TextEditingController(text: data['email'] ?? '');
-
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text("Edit"),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: "Name")),
-                TextField(
-                    controller: email,
-                    decoration: const InputDecoration(labelText: "Email")),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel")),
-            ElevatedButton(
-              onPressed: () async {
-                await db
-                    .collection(selectedCollection)
-                    .doc(selectedId)
-                    .update({
-                  "name": name.text,
-                  "email": email.text,
-                });
-
-                Navigator.pop(context);
-              },
-              child: const Text("Save"),
-            )
-          ],
         );
       },
     );
@@ -254,30 +225,34 @@ class _ManagementPageState extends State<ManagementPage> {
       child: Column(
         children: [
           const Text("Management", style: TextStyle(fontSize: 20)),
+
           const SizedBox(height: 10),
           collectionSelector(),
+
+          const SizedBox(height: 10),
+          searchField(), // 🔥 SEARCH FIELD
+
           const SizedBox(height: 10),
           dataList(),
+
           const SizedBox(height: 20),
+
           Wrap(
             spacing: 10,
             children: [
-              ElevatedButton(
-                onPressed: addItem,
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text("Add"),
-              ),
-              ElevatedButton(
-                onPressed: editItem,
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                child: const Text("Edit"),
-              ),
+              // 🔥 ONLY SHOW ADD & EDIT FOR USERS
+              if (selectedCollection == "users") ...[
+                ElevatedButton(
+                  onPressed: addItem,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text("Add"),
+                ),
+              ],
+
+              // 🔥 DELETE ALWAYS AVAILABLE
               ElevatedButton(
                 onPressed: deleteItem,
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 child: const Text("Delete"),
               ),
             ],
