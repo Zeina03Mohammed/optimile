@@ -271,9 +271,8 @@ The model's primary role is cost-matrix injection into the ALNS optimiser. Even 
 |---|---|---|---|
 | 1 | ML dataset is small (590 segments, 33 drivers) | Travel-time predictions have ~11 min average error | ALNS formula fallback used when ML cost is out of range [0.5, 90] |
 | 2 | No real-time traffic speed data in ML features | Model cannot capture rush-hour spikes | Live traffic ratio from Google Directions API used in ALNS cost multiplier |
-| 3 | GPS deviation detection requires device location permissions | MT-10/11 need real device or emulator mock | Tested via Android emulator GPS mock tool |
-| 4 | Flutter `withOpacity` and `desiredAccuracy` deprecation warnings | No functional impact; cosmetic only | Scheduled for update in next Flutter SDK migration |
-| 5 | Fleet optimisation requires ≥ 2 active vehicles | MT-29–34 need 2 vehicles configured | Single-vehicle path tested separately in MT-05/06 |
+| 3 | Flutter `withOpacity` and `desiredAccuracy` deprecation warnings | No functional impact; cosmetic only | Scheduled for update in next Flutter SDK migration |
+| 4 | Fleet optimisation requires ≥ 2 active vehicles | MT-29–34 need 2 vehicles configured | Single-vehicle path tested separately in MT-05/06 |
 
 ---
 
