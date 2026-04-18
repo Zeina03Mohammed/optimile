@@ -1996,7 +1996,15 @@ void startTrafficMonitor(BuildContext context) {
           stops[currentStopIndex].location,
         );
 
-        if (route == null) return;
+        if (route == null) {
+          addEvent(
+            "📵",
+            "Optimizing offline — no network connection. Will retry on next check.",
+            category: XaiCategory.info,
+            confidence: null,
+          );
+          return;
+        }
 
         final leg = route["legs"]?[0];
         final normal = leg?["duration"]?["value"];
@@ -2247,6 +2255,12 @@ void startTrafficMonitor(BuildContext context) {
         }
       } catch (e) {
         debugPrint("❌ Traffic monitor error: $e");
+        addEvent(
+          "📵",
+          "Optimizing offline — no network connection. Will retry on next check.",
+          category: XaiCategory.info,
+          confidence: null,
+        );
       } finally {
         _isReoptimizing = false;
       }

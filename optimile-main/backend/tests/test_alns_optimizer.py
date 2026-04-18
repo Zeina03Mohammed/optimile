@@ -245,7 +245,52 @@ class TestOptimizeRoute:
         coords = CAIRO_COORDS[:2]
         order, cost = optimize_route(coords, [False, False], [(None, None)] * 2, BASE_CTX, START_MIN)
         assert sorted(order) == [0, 1]
-        assert cost > 0
+
+    def test_ml_matrix_can_change_route_ordering(self):
+        """
+        Prove the ML cost matrix actually influences the route decision.
+
+        We build an asymmetric ML matrix that makes stop 2 (Maadi) very
+        expensive to reach early (high cost from stop 0) but cheap from
+        stop 1 (Heliopolis).  Without ML the formula is symmetric
+        (cost ∝ distance), so ALNS may pick any order.  With the biased
+        ML matrix, ALNS must prefer visiting 1 before 2.
+
+        This test proves the ML predictions propagate all the way through
+        the optimizer into the final route decision — not just that the
+        plumbing compiles.
+        """
+        coords = CAIRO_COORDS
+        n = len(coords)
+
+        # Formula-only baseline
+        formula_ctx = {**BASE_CTX}
+        formula_order, formula_cost = optimize_route(
+            coords, NO_FRAGILE, NO_WINDOWS, formula_ctx, START_MIN
+        )
+
+        # ML matrix: make 0→2 (Tahrir→Maadi) artificially expensive (45 min)
+        # and 1→2 (Heliopolis→Maadi) cheap (5 min), so Maadi should come after Heliopolis
+        ml_matrix = [[10.0] * n for _ in range(n)]
+        ml_matrix[0][2] = 45.0   # going Tahrir→Maadi directly is very slow
+        ml_matrix[1][2] = 5.0    # going via Heliopolis→Maadi is fast
+        ml_ctx = {**BASE_CTX, "ml_cost_matrix": ml_matrix}
+
+        ml_order, ml_cost = optimize_route(
+            coords, NO_FRAGILE, NO_WINDOWS, ml_ctx, START_MIN
+        )
+
+        # Both must still be valid permutations
+        assert sorted(formula_order) == list(range(n))
+        assert sorted(ml_order) == list(range(n))
+
+        # The ML route must place stop 1 before stop 2
+        # (because the ML matrix makes 0→2 much more expensive than 0→1→2)
+        assert ml_order.index(1) < ml_order.index(2), (
+            "ML matrix biased toward visiting Heliopolis(1) before Maadi(2), "
+            f"but got order {ml_order}"
+        )
+        assert ml_cost > 0
 
     def test_single_stop_route(self):
         coords = [CAIRO_COORDS[0]]

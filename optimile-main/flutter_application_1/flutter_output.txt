@@ -1,0 +1,108 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.3.69 available)
+  cloud_firestore 5.6.12 (6.3.0 available)
+  cloud_firestore_platform_interface 6.6.12 (7.2.0 available)
+  cloud_firestore_web 4.4.12 (5.3.0 available)
+  csv 5.1.1 (8.0.0 available)
+  file_picker 8.3.7 (11.0.2 available)
+  firebase_auth 5.7.0 (6.4.0 available)
+  firebase_auth_platform_interface 7.7.3 (8.1.9 available)
+  firebase_auth_web 5.15.3 (6.1.5 available)
+  firebase_core 3.15.2 (4.7.0 available)
+  firebase_core_web 2.24.1 (3.6.0 available)
+  flutter_lints 3.0.2 (6.0.0 available)
+  flutter_polyline_points 2.1.0 (3.1.0 available)
+  flutter_typeahead 5.2.0 (6.0.0 available)
+  lints 3.0.0 (6.1.0 available)
+  meta 1.17.0 (1.18.2 available)
+  package_info_plus 9.0.1 (10.0.0 available)
+  package_info_plus_platform_interface 3.2.1 (4.0.0 available)
+  test_api 0.7.10 (0.7.11 available)
+  vector_math 2.2.0 (2.3.0 available)
+  win32 5.15.0 (6.0.1 available)
+Got dependencies!
+21 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart
+00:00 +0: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClass — enum values enum has exactly 4 values
+00:00 +1: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClass — enum values all enum members exist
+00:00 +2: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — label highway label
+00:00 +3: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — label mainRoad label
+00:00 +4: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — label sideRoad label
+00:00 +5: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — label unknown label
+00:00 +6: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — label all labels are non-empty
+00:00 +7: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — icon highway icon
+00:00 +8: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — icon mainRoad icon
+00:00 +9: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — icon sideRoad icon
+00:00 +10: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — icon unknown icon
+00:00 +11: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadClassLabel — icon all icons are non-empty
+00:00 +12: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — construction lat stored correctly
+00:00 +13: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — construction lon stored correctly
+00:00 +14: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +15: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +16: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +17: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +18: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +19: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +20: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +21: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +22: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +23: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +24: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +25: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +26: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction stores all fields correctly
+00:00 +27: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic highway threshold is 0.50
+00:00 +28: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — construction fetchedAt is stored correctly
+00:00 +29: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic main road threshold is 0.60
+00:00 +30: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — severity minimum severity (clear day)
+00:00 +31: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic side road threshold is 0.40
+00:00 +32: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — severity maximum severity (extreme storm)
+00:00 +33: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic tunnel on side road threshold is 0.45
+00:00 +34: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — severity mid severity
+00:00 +35: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic unknown road threshold is 0.65
+00:00 +36: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — roadRisk zero road risk (dry roads)
+00:00 +37: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/road_incident_test.dart: RoadIncident — reroute threshold logic highway incident above threshold triggers reroute
+00:00 +38: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — roadRisk maximum road risk (flooded roads)
+00:00 +39: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — roadRisk maximum road risk (flooded roads)
+00:00 +40: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — condition strings Egyptian summer conditions
+00:00 +41: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — condition strings storm conditions
+00:00 +42: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — condition strings rainy backend condition
+00:00 +43: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — temperature Egyptian summer heat
+00:00 +44: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — temperature winter night temperatures
+00:00 +45: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — temperature humidity stored as integer
+00:00 +46: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — wind calm wind
+00:00 +47: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — wind strong khamsin wind
+00:00 +48: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/weather_data_test.dart: WeatherData — immutability same const object equals itself
+00:00 +49: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — constructor creates stop with required location
+00:00 +50: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — constructor default values
+00:00 +51: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — constructor custom values are stored correctly
+00:00 +52: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — copyWith copyWith preserves all unchanged fields
+00:00 +53: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — copyWith copyWith overrides specified fields only
+00:00 +54: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — copyWith copyWith with status change
+00:00 +55: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — toPayload payload contains lat, lng, is_fragile, window_start, window_end
+00:00 +56: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — toPayload payload has correct key names (snake_case for backend)
+00:00 +57: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — toPayload non-fragile stop payload has is_fragile=false
+00:00 +58: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — fromPlaceDetails creates stop from PlaceDetails with correct location
+00:00 +59: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — fromPlaceDetails title comes from PlaceDetails.name
+00:00 +60: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — fromPlaceDetails isFragile defaults to false
+00:00 +61: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — fromPlaceDetails isFragile can be overridden
+00:00 +62: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Stop — fromPlaceDetails sequenceOrder is passed correctly
+00:00 +63: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: RouteModel default name and empty stops
+00:00 +64: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: RouteModel custom name
+00:00 +65: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: RouteModel copyWith preserves id
+00:00 +66: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: RouteModel copyWith with stops creates independent list
+00:00 +67: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: XaiCategory all six categories exist
+00:00 +68: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: XaiCategory XaiCategory has exactly 6 values
+00:00 +69: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: EventLogEntry required fields stored correctly
+00:00 +70: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: EventLogEntry default category is info
+00:00 +71: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: EventLogEntry optional XAI fields default to null
+00:00 +72: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: EventLogEntry structured XAI fields stored correctly
+00:00 +73: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: EventLogEntry optimization category entry
+00:00 +74: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: StopConfig stores isFragile
+00:00 +75: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: StopConfig stores time window
+00:00 +76: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: StopConfig null time values allowed
+00:00 +77: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: PlaceDetails default type and status
+00:00 +78: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: PlaceDetails custom type and status
+00:00 +79: /Users/mariamshaddad/Documents/GitHub/optimile/optimile-main/flutter_application_1/test/unit/stop_model_test.dart: Place stores placeId and description
+00:00 +80: All tests passed!
