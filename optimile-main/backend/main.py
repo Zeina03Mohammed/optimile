@@ -394,7 +394,7 @@ class Incident(BaseModel):
 
 class OptimizeRequest(BaseModel):
     stops: List[Stop]
-    vehicle: str              # motorcycle | scooter | van
+    vehicle: str              # motorcycle | car | van
     traffic: str
     weather: str
 
@@ -948,7 +948,7 @@ class VehicleState(BaseModel):
     current_lat: float
     current_lng: float
     remaining_stops: List[Stop]
-    vehicle: str  # motorcycle | scooter | van
+    vehicle: str  # motorcycle | car | van
     traffic: str
     weather: str
 
@@ -1113,7 +1113,7 @@ class PublicStop(BaseModel):
 
 class PublicOptimizeRequest(BaseModel):
     stops: List[PublicStop]
-    vehicle: str = "van"       # van | scooter | motorcycle
+    vehicle: str = "van"       # van | car | motorcycle
     weather: str = "Sunny"     # Sunny | Rainy | Storm | Snowy | Fog
 
 # ── Helper ───────────────────────────────────────────────────────────

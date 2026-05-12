@@ -23,13 +23,13 @@ OUT_JSON  = os.path.join(OUT_DIR, "drivers.json")
 # ── Driver mapping: top 8 real drivers -> Cairo areas ──────────────────────────
 # Selected based on record count and geographic cluster analysis
 DRIVER_PROFILES = [
-    {"id": 28,  "name": "Ali Edris",              "areas": ["Downtown"],              "vehicle": "Scooter"},
+    {"id": 28,  "name": "Ali Edris",              "areas": ["Downtown"],              "vehicle": "Car"},
     {"id": 29,  "name": "Hassan Hossny",           "areas": ["Maadi"],                 "vehicle": "Van"},
     {"id": 64,  "name": "Mohamed Samir",           "areas": ["New Cairo", "Obour"],    "vehicle": "Van"},
-    {"id": 57,  "name": "Abd El Rahman Mostafa",   "areas": ["Nasr City", "Heliopolis"], "vehicle": "Scooter"},
-    {"id": 31,  "name": "Ahmed Hossam",            "areas": ["Shubra"],                "vehicle": "Scooter"},
-    {"id": 62,  "name": "Ayman Hamad",             "areas": ["Heliopolis"],            "vehicle": "Scooter"},
-    {"id": 72,  "name": "Basma Saber",             "areas": ["Nasr City"],             "vehicle": "Scooter"},
+    {"id": 57,  "name": "Abd El Rahman Mostafa",   "areas": ["Nasr City", "Heliopolis"], "vehicle": "Car"},
+    {"id": 31,  "name": "Ahmed Hossam",            "areas": ["Shubra"],                "vehicle": "Car"},
+    {"id": 62,  "name": "Ayman Hamad",             "areas": ["Heliopolis"],            "vehicle": "Car"},
+    {"id": 72,  "name": "Basma Saber",             "areas": ["Nasr City"],             "vehicle": "Car"},
     {"id": 40,  "name": "Abdeen",                  "areas": ["Downtown", "Shubra"],    "vehicle": "Van"},
 ]
 

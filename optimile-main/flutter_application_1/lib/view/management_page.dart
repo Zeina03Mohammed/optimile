@@ -117,7 +117,7 @@ class _ManagementPageState extends State<ManagementPage> {
         final area = TextEditingController();
 
         String role = "customer";
-        String vehicle = "Scooter";
+        String vehicle = "Car";
 
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -160,8 +160,8 @@ class _ManagementPageState extends State<ManagementPage> {
                       DropdownButtonFormField<String>(
                         value: vehicle,
                         items: const [
-                          DropdownMenuItem(
-                              value: "Scooter", child: Text("Scooter")),
+                          DropdownMenuItem(value: "Motorcycle", child: Text("Motorcycle")),
+                          DropdownMenuItem(value: "Car", child: Text("Car")),
                           DropdownMenuItem(value: "Van", child: Text("Van")),
                         ],
                         onChanged: (v) {

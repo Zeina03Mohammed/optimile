@@ -28,7 +28,7 @@ def dist(a, b):
 def vehicle_speed(vehicle: str) -> float:
     return {
         "motorcycle": 0.9,   # fastest
-        "scooter": 0.75,
+        "car": 0.75,
         "van": 0.6,          # slowest
     }.get(vehicle, 0.7)
 

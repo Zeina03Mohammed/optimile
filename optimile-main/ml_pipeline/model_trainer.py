@@ -65,14 +65,16 @@ N_FOLDS = 5
 # PREPROCESSING STEP  (shared by all models)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_preprocessor():
+def build_preprocessor(cat_features=None):
+    if cat_features is None:
+        cat_features = CATEGORICAL_FEATURES
     return ColumnTransformer(
         transformers=[
             ("num", StandardScaler(), NUMERIC_FEATURES),
             (
                 "cat",
                 OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                CATEGORICAL_FEATURES,
+                cat_features,
             ),
         ],
         remainder="drop",
@@ -83,12 +85,12 @@ def build_preprocessor():
 # MODEL REGISTRY
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_candidate_models():
+def get_candidate_models(cat_features=None):
     """
     Returns dict of {name: sklearn estimator}.
     All are wrapped in a Pipeline with the shared preprocessor.
     """
-    prep = build_preprocessor
+    prep = lambda: build_preprocessor(cat_features)
 
     candidates = {
         # LinearRegression omitted: numerically unstable with sparse OHE on
@@ -154,7 +156,7 @@ def get_candidate_models():
 # CROSS-VALIDATION COMPARISON
 # ─────────────────────────────────────────────────────────────────────────────
 
-def compare_models(X: pd.DataFrame, y: pd.Series, verbose: bool = True) -> pd.DataFrame:
+def compare_models(X: pd.DataFrame, y: pd.Series, verbose: bool = True, cat_features=None) -> pd.DataFrame:
     """
     Runs 5-fold CV for every candidate model.
     Returns a results DataFrame sorted by mean CV-MAE (ascending).
@@ -163,7 +165,7 @@ def compare_models(X: pd.DataFrame, y: pd.Series, verbose: bool = True) -> pd.Da
     scoring = ["neg_mean_absolute_error", "neg_root_mean_squared_error", "r2"]
 
     rows = []
-    candidates = get_candidate_models()
+    candidates = get_candidate_models(cat_features)
 
     if verbose:
         print(f"\n{'─'*60}")
@@ -222,7 +224,7 @@ def compare_models(X: pd.DataFrame, y: pd.Series, verbose: bool = True) -> pd.Da
 # FINAL FIT + EVALUATION ON HOLD-OUT
 # ─────────────────────────────────────────────────────────────────────────────
 
-def train_best_model(X: pd.DataFrame, y: pd.Series, results: pd.DataFrame, verbose: bool = True):
+def train_best_model(X: pd.DataFrame, y: pd.Series, results: pd.DataFrame, verbose: bool = True, cat_features=None):
     """
     Fits the best-ranked model on 80% of data, evaluates on 20% hold-out,
     then re-fits on the FULL dataset before saving.
@@ -231,7 +233,7 @@ def train_best_model(X: pd.DataFrame, y: pd.Series, results: pd.DataFrame, verbo
     from sklearn.model_selection import train_test_split
 
     best_name = results.iloc[0]["model_name"]
-    candidates = get_candidate_models()
+    candidates = get_candidate_models(cat_features)
     pipeline = candidates[best_name]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -252,7 +254,7 @@ def train_best_model(X: pd.DataFrame, y: pd.Series, results: pd.DataFrame, verbo
         print(f"    R²    = {r2:.3f}")
 
     # Re-fit on full data for deployment
-    candidates_full = get_candidate_models()
+    candidates_full = get_candidate_models(cat_features)
     final_pipeline = candidates_full[best_name]
     final_pipeline.fit(X, y)
 
@@ -325,10 +327,21 @@ def load_best_model():
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_training(data_path: str = None, verbose: bool = True):
-    """Full training pipeline: preprocess → compare → train best → save."""
-    kwargs = {"path": data_path} if data_path else {}
-    segments = run_preprocessing(verbose=verbose, **kwargs)
+def run_training(data_path: str = None, segments_path: str = None, verbose: bool = True):
+    """Full training pipeline: preprocess → compare → train best → save.
+
+    Pass segments_path to skip GPS preprocessing and load pre-computed
+    segment features directly (e.g. from scripts/augment_data.py output).
+    """
+    if segments_path:
+        if verbose:
+            print(f"  Loading pre-computed segments from {segments_path}")
+        segments = pd.read_csv(segments_path)
+        if verbose:
+            print(f"  {len(segments)} segments loaded")
+    else:
+        kwargs = {"path": data_path} if data_path else {}
+        segments = run_preprocessing(verbose=verbose, **kwargs)
 
     X, y = get_X_y(segments)
 
@@ -338,8 +351,12 @@ def run_training(data_path: str = None, verbose: bool = True):
             "Cannot train a reliable model with this few samples."
         )
 
-    results = compare_models(X, y, verbose=verbose)
-    best_pipeline, metadata = train_best_model(X, y, results, verbose=verbose)
+    # Determine which categorical features are actually present in X
+    from ml_pipeline.preprocessor import CATEGORICAL_FEATURES
+    cat_features = [c for c in CATEGORICAL_FEATURES if c in X.columns]
+
+    results = compare_models(X, y, verbose=verbose, cat_features=cat_features)
+    best_pipeline, metadata = train_best_model(X, y, results, verbose=verbose, cat_features=cat_features)
 
     # Save full comparison table alongside metadata
     results_path_csv = os.path.join(MODELS_DIR, "all_model_results.csv")

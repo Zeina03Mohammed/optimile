@@ -39,6 +39,18 @@ MAX_GAP_MIN = 90.0   # above → lunch break / end-of-shift
 DBSCAN_EPS_DEG = 0.008
 DBSCAN_MIN_SAMPLES = 3
 
+# Driver ID → vehicle type mapping (from driver profiles)
+DRIVER_VEHICLE_MAP = {
+    28: "car",   # Ali Edris
+    57: "car",   # Abd El Rahman Mostafa
+    31: "car",   # Ahmed Hossam
+    62: "car",   # Ayman Hamad
+    72: "car",   # Basma Saber
+    29: "van",   # Hassan Hossny
+    64: "van",   # Mohamed Samir
+    40: "van",   # Abdeen
+}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -97,6 +109,7 @@ def load_raw(path: str = DATA_PATH, verbose: bool = False) -> pd.DataFrame:
     df = df.dropna(subset=["lat", "lng"]).reset_index(drop=True)
 
     df = df.rename(columns={"Driver ID": "driver_id"})
+    df["vehicle_type"] = df["driver_id"].map(DRIVER_VEHICLE_MAP).fillna("car")
     return df
 
 
@@ -166,6 +179,7 @@ def build_segments(df: pd.DataFrame) -> pd.DataFrame:
                     # ── identifiers ──────────────────────────────────────────
                     "driver_key": driver,
                     "date": date,
+                    "vehicle_type": row_a["vehicle_type"],
                     # ── origin stop ──────────────────────────────────────────
                     "lat_origin": row_a["lat"],
                     "lng_origin": row_a["lng"],
@@ -293,14 +307,27 @@ NUMERIC_FEATURES = [
 
 CATEGORICAL_FEATURES = [
     "cluster_dest_cat",
+    "vehicle_type",
+    "traffic_level",
+    "weather",
 ]
+
+# Features that are only present in the physics-generated dataset.
+# get_X_y drops them silently when missing (real GPS data doesn't have them).
+OPTIONAL_CATEGORICAL = ["traffic_level", "weather"]
 
 TARGET = "time_to_next_stop_min"
 
 
 def get_X_y(segments: pd.DataFrame):
-    """Return (X, y) ready for sklearn pipelines."""
-    X = segments[NUMERIC_FEATURES + CATEGORICAL_FEATURES].copy()
+    """Return (X, y) ready for sklearn pipelines.
+
+    Optional categorical features (traffic_level, weather) are included only
+    when present — real GPS segments don't have them but the physics-generated
+    dataset does.
+    """
+    present_cat = [c for c in CATEGORICAL_FEATURES if c in segments.columns]
+    X = segments[NUMERIC_FEATURES + present_cat].copy()
     y = segments[TARGET].copy()
     return X, y
 

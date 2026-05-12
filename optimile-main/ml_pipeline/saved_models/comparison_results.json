@@ -1,11 +1,11 @@
 {
-  "model_name": "RandomForest",
-  "holdout_mae": 11.245,
-  "holdout_rmse": 15.502,
-  "holdout_r2": 0.3025,
-  "cv_mae_mean": 10.508,
-  "cv_mae_std": 1.035,
-  "n_segments": 590,
+  "model_name": "HistGradientBoosting",
+  "holdout_mae": 3.748,
+  "holdout_rmse": 6.053,
+  "holdout_r2": 0.8294,
+  "cv_mae_mean": 3.643,
+  "cv_mae_std": 0.152,
+  "n_segments": 6590,
   "n_folds": 5,
   "feature_names": [
     "distance_km",
@@ -20,6 +20,9 @@
     "route_progress",
     "is_same_cluster",
     "bearing_deg",
-    "cluster_dest_cat"
+    "cluster_dest_cat",
+    "vehicle_type",
+    "traffic_level",
+    "weather"
   ]
 }

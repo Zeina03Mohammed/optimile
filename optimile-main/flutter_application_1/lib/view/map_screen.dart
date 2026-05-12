@@ -519,7 +519,7 @@ class _MapView extends StatelessWidget {
                           value: vm.vehicleType,
                           items: const [
                             DropdownMenuItem(value: "motorcycle", child: Text("Motorcycle")),
-                            DropdownMenuItem(value: "scooter", child: Text("Scooter")),
+                            DropdownMenuItem(value: "car", child: Text("Car")),
                             DropdownMenuItem(value: "van", child: Text("Van")),
                           ],
                           onChanged: vm.navigationStarted

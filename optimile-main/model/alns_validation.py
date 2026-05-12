@@ -63,7 +63,7 @@ def stability_check(runs: int = 5) -> None:
     results are deterministic when the seed is fixed.
     """
     coords, fragile, windows = _toy_instance()
-    ctx = {"vehicle": "scooter", "traffic": "Medium"}
+    ctx = {"vehicle": "car", "traffic": "Medium"}
 
     baseline_order, baseline_cost = optimize_route(
         coords=coords,
@@ -126,7 +126,7 @@ def robustness_benchmark() -> None:
     and reports mean and std-dev of ETA improvements.
     """
     sizes = [4, 7, 10]
-    vehicles = ["motorcycle", "scooter", "van"]
+    vehicles = ["motorcycle", "car", "van"]
     traffic_levels = ["Low", "Normal", "Medium", "Heavy"]
     seeds = list(range(10))
 

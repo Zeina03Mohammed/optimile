@@ -76,7 +76,7 @@ class TestOptimizeResponseShape:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestOptimizeVehicleTypes:
-    @pytest.mark.parametrize("vehicle", ["motorcycle", "scooter", "van"])
+    @pytest.mark.parametrize("vehicle", ["motorcycle", "car", "van"])
     def test_all_vehicle_types_succeed(self, client, optimize_body, vehicle):
         optimize_body["vehicle"] = vehicle
         r = client.post("/optimize", json=optimize_body)

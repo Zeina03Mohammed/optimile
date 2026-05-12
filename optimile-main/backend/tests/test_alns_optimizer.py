@@ -36,7 +36,7 @@ CAIRO_COORDS = [
 
 NO_FRAGILE  = [False] * 4
 NO_WINDOWS  = [(None, None)] * 4
-BASE_CTX    = {"vehicle": "van", "traffic": "Normal", "weather": "Sunny"}
+BASE_CTX    = {"vehicle": "car", "traffic": "Normal", "weather": "Sunny"}
 START_MIN   = 480  # 08:00
 
 
@@ -48,8 +48,8 @@ class TestVehicleSpeed:
     def test_motorcycle_speed(self):
         assert vehicle_speed("motorcycle") == pytest.approx(0.9)
 
-    def test_scooter_speed(self):
-        assert vehicle_speed("scooter") == pytest.approx(0.75)
+    def test_car_speed(self):
+        assert vehicle_speed("car") == pytest.approx(0.75)
 
     def test_van_speed(self):
         assert vehicle_speed("van") == pytest.approx(0.6)
