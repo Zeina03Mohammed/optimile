@@ -684,7 +684,7 @@ void addStop(
 
     try {
       final uri = Uri.parse(
-        '${_backendBase}/api/v1/orders?driver_id=$driverId&status=pending',
+        '${_backendBase}/api/v1/orders?driver_id=$driverId',
       );
       final response = await http.get(uri, headers: {
         'X-API-Key': 'opt-demo-key-001',
