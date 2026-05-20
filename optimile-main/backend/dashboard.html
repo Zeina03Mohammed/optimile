@@ -257,6 +257,23 @@
       border: 1px solid #2d3148 !important; border-radius: 8px !important; font-size: 12px !important;
     }
     .leaflet-popup-tip { background: #1a1d27 !important; }
+
+    .alert-card {
+      border-bottom: 1px solid #2d3148;
+      padding: 14px 16px;
+    }
+    .alert-card .ac-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .alert-type-badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+    .alert-accident { background: #7f1d1d; color: #fca5a5; }
+    .alert-vehicle_failure { background: #78350f; color: #fcd34d; }
+    .alert-malfunction { background: #312e81; color: #a5b4fc; }
+    .alert-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .alert-btn { padding: 6px 12px; border-radius: 6px; border: none; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .btn-accept { background: #166534; color: #bbf7d0; }
+    .btn-fragile { background: #78350f; color: #fde68a; }
+    .btn-dismiss { background: #1e2235; color: #94a3b8; border: 1px solid #2d3148; }
+    .driver-select { width: 100%; padding: 6px; background: #1e2235; color: #e2e8f0; border: 1px solid #2d3148; border-radius: 6px; font-size: 12px; margin-top: 4px; }
+    .no-alerts { padding: 32px 16px; text-align: center; color: #475569; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -335,6 +352,7 @@
       <button class="tab-btn" onclick="switchTab('orders', this)">Today's Orders</button>
       <button class="tab-btn" onclick="switchTab('schedule', this)">Schedule</button>
       <button class="tab-btn" onclick="switchTab('upload', this)">Upload</button>
+      <button class="tab-btn" onclick="switchTab('alerts',this)">🚨 Alerts</button>
     </div>
 
     <!-- DRIVERS TAB -->
@@ -355,6 +373,11 @@
     <!-- SCHEDULE TAB -->
     <div class="tab-panel" id="tab-schedule">
       <div class="schedule-list" id="schedule-list"></div>
+    </div>
+
+    <!-- ALERTS TAB -->
+    <div class="tab-panel" id="tab-alerts">
+      <div id="alerts-list"><div class="no-alerts">No active alerts</div></div>
     </div>
 
     <!-- UPLOAD TAB -->
@@ -438,6 +461,100 @@ async function apiFetch(path) {
   return res.json();
 }
 
+// ── ALERTS ───────────────────────────────────────────────────────────
+let alertsData = [];
+
+async function fetchAlerts() {
+  try {
+    const data = await apiFetch('/api/v1/alerts');
+    alertsData = data.alerts || [];
+    renderAlerts();
+    // Update tab label with count
+    const alertTab = document.querySelector('.tab-btn[onclick*="alerts"]');
+    if (alertTab) alertTab.textContent = alertsData.length > 0 ? `🚨 Alerts (${alertsData.length})` : '🚨 Alerts';
+  } catch(e) { console.error('alerts fetch error', e); }
+}
+
+function alertTypeName(t) {
+  return t === 'accident' ? 'Accident' : t === 'vehicle_failure' ? 'Vehicle Failure' : 'Malfunction';
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alerts-list');
+  if (!alertsData.length) { el.innerHTML = '<div class="no-alerts">✅ No active alerts</div>'; return; }
+  el.innerHTML = alertsData.map(a => {
+    const time = new Date(a.timestamp + 'Z').toLocaleTimeString();
+    const sug = a.suggestion;
+    const availDrivers = driversData.filter(d => d.id != a.driver_id);
+    const driverOptions = availDrivers.map(d => `<option value="${d.id}">${d.name} (${d.vehicle})</option>`).join('');
+    return `
+      <div class="alert-card" id="alert-${a.id}">
+        <div class="ac-header">
+          <span class="alert-type-badge alert-${a.alert_type}">${alertTypeName(a.alert_type)}</span>
+          <span style="font-weight:600;font-size:13px">${a.driver_name}</span>
+          <span style="color:#64748b;font-size:11px;margin-left:auto">${time}</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">
+          ${a.remaining_stops} stops remaining · ${a.fragile_stops} fragile
+        </div>
+        ${sug ? `<div style="font-size:12px;color:#6366f1;margin-bottom:6px">
+          💡 Suggested: <b>${sug.driver_name}</b> (${sug.vehicle}) — ${sug.note}
+        </div>` : ''}
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">Override driver:</div>
+        <select class="driver-select" id="sel-${a.id}">${driverOptions}</select>
+        <div class="alert-actions">
+          ${sug ? `<button class="alert-btn btn-accept" onclick="resolveAlert('${a.id}','${sug.driver_id}','all')">✅ Accept suggestion (all stops)</button>` : ''}
+          <button class="alert-btn btn-fragile" onclick="resolveAlertCustom('${a.id}','urgent_fragile')">⚠️ Transfer fragile/urgent only</button>
+          <button class="alert-btn btn-accept" onclick="resolveAlertCustom('${a.id}','all')" style="background:#1e3a5f;color:#93c5fd">↗ Transfer to selected driver</button>
+          <button class="alert-btn btn-dismiss" onclick="dismissAlert('${a.id}')">✕ Dismiss</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function resolveAlert(alertId, driverId, mode) {
+  const key = document.getElementById('api-key-input')?.value.trim() || API_KEY;
+  try {
+    const r = await fetch(`/api/v1/alert/${alertId}/resolve`, {
+      method: 'POST',
+      headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chosen_driver_id: driverId, mode })
+    });
+    const data = await r.json();
+    if (r.ok) {
+      showToast(`✅ ${data.transferred_count} stops transferred to ${data.transferred_to}`);
+      fetchAlerts(); refresh();
+    } else { showToast('❌ ' + (data.detail || 'Error'), true); }
+  } catch(e) { showToast('❌ ' + e.message, true); }
+}
+
+async function resolveAlertCustom(alertId, mode) {
+  const sel = document.getElementById('sel-' + alertId);
+  const driverId = sel ? sel.value : null;
+  if (!driverId) { showToast('Please select a driver first', true); return; }
+  await resolveAlert(alertId, driverId, mode);
+}
+
+async function dismissAlert(alertId) {
+  const key = document.getElementById('api-key-input')?.value.trim() || API_KEY;
+  try {
+    await fetch(`/api/v1/alert/${alertId}/resolve`, {
+      method: 'POST',
+      headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chosen_driver_id: '0', mode: 'dismiss' })
+    });
+    fetchAlerts();
+  } catch(e) {}
+}
+
+function showToast(msg, isError=false) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${isError?'#7f1d1d':'#166534'};color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.4)`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
 async function refresh() {
   try {
     const today = todayStr();
@@ -462,6 +579,7 @@ async function refresh() {
     renderSchedule();
     renderMap();
     renderDateNav();
+    fetchAlerts();
 
     document.getElementById('last-updated').textContent =
       'Updated ' + new Date().toLocaleTimeString();

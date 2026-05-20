@@ -52,7 +52,7 @@ bool isFragile = false;
 
   // ================= ROUTE (multi-route = multiple cars) =================
   List<RouteModel> _routes = [
-    RouteModel(id: '1', name: 'Car 1', color: kRouteColors[0]),
+    RouteModel(id: '1', name: 'Route 1', color: kRouteColors[0]),
   ];
   int _selectedRouteIndex = 0;
   /// When navigation is started, this is the route we're actually driving.
@@ -87,6 +87,13 @@ bool isFragile = false;
   String distance = '';
   String duration = '';
   int currentStopIndex = 0;
+
+  // ================= TRIP STATS =================
+  DateTime? _tripStartTime;
+  double _initialEtaMin = 0;
+  double _optimizedEtaMin = 0;
+  int _reoptCount = 0;
+  int _stopsCompleted = 0;
 
   // ================= EVENT LOG =================
   final List<EventLogEntry> eventLog = [];
@@ -661,12 +668,15 @@ void addStop(
 }
 
   // ================= LOAD DRIVER ORDERS FROM BACKEND =================
+  int? _driverId;
+
   Future<void> loadDriverOrders(int? driverId) async {
     if (driverId == null) return;
+    _driverId = driverId;
 
     try {
       final uri = Uri.parse(
-        '${_backendBase}/api/v1/orders?driver_id=$driverId',
+        '${_backendBase}/api/v1/orders?driver_id=$driverId&status=pending',
       );
       final response = await http.get(uri, headers: {
         'X-API-Key': 'opt-demo-key-001',
@@ -713,6 +723,17 @@ void addStop(
         }
       }
 
+      // Auto-set vehicle type from driver profile
+      try {
+        final profileUri = Uri.parse('${_backendBase}/api/v1/driver/$driverId/status');
+        final profileResp = await http.get(profileUri, headers: {'X-API-Key': 'opt-demo-key-001'});
+        if (profileResp.statusCode == 200) {
+          final profile = jsonDecode(profileResp.body) as Map<String, dynamic>;
+          final v = (profile['vehicle'] as String? ?? 'van').toLowerCase();
+          vehicleType = v == 'scooter' ? 'scooter' : v == 'motorcycle' ? 'motorcycle' : 'van';
+        }
+      } catch (_) {}
+
       addEvent('📦', 'Loaded ${orders.length} orders for driver #$driverId');
       await rebuildMap();
 
@@ -733,6 +754,38 @@ void addStop(
       notifyListeners();
     } catch (e) {
       debugPrint('loadDriverOrders error: $e');
+    }
+  }
+
+  // ================= LOAD ORDERS BY NAME (fallback) =================
+  Future<void> loadDriverOrdersByName(String name) async {
+    try {
+      // Fetch all drivers and find matching ID by name
+      final driversUri = Uri.parse('$_backendBase/api/v1/drivers');
+      final driversResp = await http.get(driversUri, headers: {'X-API-Key': 'opt-demo-key-001'});
+      if (driversResp.statusCode != 200) return;
+
+      final driversData = jsonDecode(driversResp.body) as Map<String, dynamic>;
+      final drivers = (driversData['drivers'] as List<dynamic>?) ?? [];
+
+      // Match by name (case-insensitive, partial match)
+      final nameLower = name.toLowerCase();
+      final match = drivers.firstWhere(
+        (d) => (d['name'] as String? ?? '').toLowerCase().contains(nameLower) ||
+               nameLower.contains((d['name'] as String? ?? '').toLowerCase().split(' ').first),
+        orElse: () => null,
+      );
+
+      if (match == null) {
+        debugPrint('loadDriverOrdersByName: no match for "$name"');
+        return;
+      }
+
+      final matchedId = (match['id'] as num).toInt();
+      debugPrint('loadDriverOrdersByName: matched "$name" → driver #$matchedId');
+      await loadDriverOrders(matchedId);
+    } catch (e) {
+      debugPrint('loadDriverOrdersByName error: $e');
     }
   }
 
@@ -767,6 +820,7 @@ void addStop(
       'Delivered: ${stopTitles[currentStop] ?? "Stop ${currentStopIndex + 1}"}',
     );
 
+    _stopsCompleted++;
     if (currentStopIndex < stops.length - 1) {
       currentStopIndex++;
       _updateStopProgress();
@@ -794,7 +848,7 @@ void addStop(
     final color = kRouteColors[_routes.length % kRouteColors.length];
     _routes.add(RouteModel(
       id: nextId,
-      name: 'Car ${_routes.length + 1}',
+      name: 'Route ${_routes.length + 1}',
       color: color,
     ));
     _selectedRouteIndex = _routes.length - 1;
@@ -895,6 +949,8 @@ void addStop(
         origin = stop.location;
       }
 
+      _initialEtaMin = initialEta;
+      _optimizedEtaMin = optimizedEta;
       final improvement = initialEta - optimizedEta;
       if (improvement > 0.5) {
         for (final s in route.stops) stopTitles.remove(s);
@@ -1081,6 +1137,9 @@ void addStop(
     _plannedRoutePoints.clear();
     fleetTransferOccurred = false;
     eventLog.clear();
+    _tripStartTime = DateTime.now();
+    _reoptCount = 0;
+    _stopsCompleted = 0;
 
     // Set up simulated positions for non-active vehicles
     for (int r = 0; r < _routes.length; r++) {
@@ -1299,14 +1358,61 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
       );
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text(completed ? "Route completed 🎉" : "Route marked as done"),
-      ),
-    );
+    if (completed && _tripStartTime != null) {
+      final duration = DateTime.now().difference(_tripStartTime!);
+      final mins = duration.inMinutes;
+      final secs = duration.inSeconds % 60;
+      final timeSaved = (_initialEtaMin - _optimizedEtaMin).clamp(0, double.infinity);
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Row(children: [
+              Icon(Icons.emoji_events, color: Colors.amber),
+              SizedBox(width: 8),
+              Text("Trip Complete!"),
+            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _statRow("Total time", "${mins}m ${secs}s"),
+                _statRow("Stops completed", "$_stopsCompleted"),
+                _statRow("Time saved by optimization", "${timeSaved.toStringAsFixed(1)} min"),
+                _statRow("Re-optimizations triggered", "$_reoptCount"),
+                if (_optimizedEtaMin > 0)
+                  _statRow("Optimized ETA", "${_optimizedEtaMin.toStringAsFixed(1)} min"),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Done"),
+              ),
+            ],
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Route marked as done")),
+      );
+    }
 
     await rebuildMap();
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
   }
 
   /// Simulate traffic: run ALNS and ALNS+Bellman–Ford on the same route/incident, then apply the better result.
@@ -2281,6 +2387,7 @@ Future<bool> reoptimizeRoute({
   if (!navigationStarted || _isReoptimizing || stops.isEmpty) return false;
 
   _isReoptimizing = true;
+  _reoptCount++;
   _lastReoptTime = DateTime.now();
 
   try {
@@ -2737,6 +2844,26 @@ Future<void> fleetReoptimize(BuildContext context) async {
     }
   } finally {
     _isReoptimizing = false;
+  }
+}
+
+// ================= SEND ALERT =================
+Future<void> sendAlert(String alertType) async {
+  try {
+    final uri = Uri.parse('$_backendBase/api/v1/alert');
+    final body = jsonEncode({
+      'driver_id': '${_driverId ?? 0}',
+      'alert_type': alertType,
+      'lat': currentLocation?.latitude,
+      'lng': currentLocation?.longitude,
+    });
+    await http.post(uri, headers: {
+      'X-API-Key': 'opt-demo-key-001',
+      'Content-Type': 'application/json',
+    }, body: body);
+    addEvent('🚨', 'Emergency alert sent: $alertType', category: XaiCategory.hazard);
+  } catch (e) {
+    debugPrint('sendAlert error: $e');
   }
 }
 

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ALT-1779290128-57",
+    "driver_id": "57",
+    "driver_name": "Abd El Rahman Mostafa",
+    "alert_type": "accident",
+    "lat": 30.06,
+    "lng": 31.33,
+    "notes": null,
+    "timestamp": "2026-05-20T15:15:28.153443",
+    "status": "resolved",
+    "remaining_stops": 12,
+    "fragile_stops": 5,
+    "suggestion": {
+      "driver_id": "62",
+      "driver_name": "Ayman Hamad",
+      "vehicle": "Scooter",
+      "transferable_count": 12,
+      "non_transferable_count": 0,
+      "note": "Can take 12 of 12 stops"
+    },
+    "resolved_by_driver": "28",
+    "resolved_at": "2026-05-20T15:18:49.784048",
+    "transferred_count": 6
+  },
+  {
+    "id": "ALT-1779291281-31",
+    "driver_id": "31",
+    "driver_name": "Ahmed Hossam",
+    "alert_type": "accident",
+    "lat": 30.08776,
+    "lng": 31.2725583,
+    "notes": null,
+    "timestamp": "2026-05-20T15:34:41.406025",
+    "status": "resolved",
+    "remaining_stops": 11,
+    "fragile_stops": 7,
+    "suggestion": {
+      "driver_id": "62",
+      "driver_name": "Ayman Hamad",
+      "vehicle": "Scooter",
+      "transferable_count": 11,
+      "non_transferable_count": 0,
+      "note": "Can take 11 of 11 stops"
+    },
+    "resolved_by_driver": "28",
+    "resolved_at": "2026-05-20T15:35:23.554455",
+    "transferred_count": 7
+  }
+]

@@ -27,17 +27,19 @@ class MapScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authVm = Provider.of<AuthViewModel>(context, listen: false);
     final driverId = authVm.currentDriver?.driverId;
+    final driverName = authVm.currentDriver?.name;
 
     return ChangeNotifierProvider(
       create: (_) => MapVM()..goToCurrentLocation(),
-      child: _MapView(driverId: driverId),
+      child: _MapView(driverId: driverId, driverName: driverName),
     );
   }
 }
 
 class _MapView extends StatelessWidget {
   final int? driverId;
-  const _MapView({this.driverId});
+  final String? driverName;
+  const _MapView({this.driverId, this.driverName});
 
   @override
   Widget build(BuildContext context) {
@@ -59,11 +61,13 @@ class _MapView extends StatelessWidget {
             onMapCreated: (c) {
               vm.mapController = c;
               // Load orders after map is ready so camera zoom to Cairo works
-              if (driverId != null) {
-                Future.delayed(const Duration(milliseconds: 500), () {
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (driverId != null) {
                   vm.loadDriverOrders(driverId);
-                });
-              }
+                } else if (driverName != null) {
+                  vm.loadDriverOrdersByName(driverName!);
+                }
+              });
             },
             onTap: (latLng) async {
               // Unified stop configuration: fragile + time window
@@ -423,14 +427,14 @@ class _MapView extends StatelessWidget {
                         ],
                       ),
                       // Per-vehicle ETA
-                      if (vm.activeVehicleEta.isNotEmpty) ...[
+                      if (vm.activeVehicleEta.isNotEmpty && vm.activeVehicleEta != '0.0 min') ...[
                         const SizedBox(height: 2),
                         Row(
                           children: [
                             Icon(Icons.local_shipping, size: 14, color: Colors.orange.shade700),
                             const SizedBox(width: 4),
                             Text(
-                              "${vm.routes[vm.activeRouteIndex].name} ETA: ${vm.activeVehicleEta}",
+                              "Trip ETA: ${vm.activeVehicleEta}",
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -448,6 +452,48 @@ class _MapView extends StatelessWidget {
                     ],
                     // Pre-navigation info
                     if (!vm.navigationStarted) ...[
+                      // ── TRIP SUMMARY ──
+                      if (vm.currentStops.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.route, size: 15, color: Color(0xFF6366F1)),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Today's Trip",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _summaryChip(
+                              Icons.inventory_2_outlined,
+                              "${vm.currentStops.length}",
+                              "Stops",
+                              const Color(0xFF6366F1),
+                            ),
+                            _summaryChip(
+                              Icons.warning_amber_rounded,
+                              "${vm.currentStops.where((s) => s.isFragile).length}",
+                              "Fragile",
+                              Colors.orange,
+                            ),
+                            _summaryChip(
+                              Icons.directions_car_outlined,
+                              vm.vehicleType[0].toUpperCase() + vm.vehicleType.substring(1),
+                              "Vehicle",
+                              Colors.teal,
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 16),
+                      ],
                       if (vm.duration.isNotEmpty)
                         Text(
                           vm.duration,
@@ -512,25 +558,6 @@ class _MapView extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Text("Vehicle:", style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          dropdownColor: const Color.fromARGB(255, 249, 245, 245),
-                          value: vm.vehicleType,
-                          items: const [
-                            DropdownMenuItem(value: "motorcycle", child: Text("Motorcycle")),
-                            DropdownMenuItem(value: "car", child: Text("Car")),
-                            DropdownMenuItem(value: "van", child: Text("Van")),
-                          ],
-                          onChanged: vm.navigationStarted
-                              ? null
-                              : (v) => vm.setVehicleType(v!),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
                         if (!vm.navigationStarted) ...[
                           Expanded(
                             child: ElevatedButton.icon(
@@ -567,11 +594,89 @@ class _MapView extends StatelessWidget {
                         ],
                       ],
                     ),
+                    if (vm.navigationStarted) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade400,
+                            side: BorderSide(color: Colors.red.shade400),
+                          ),
+                          onPressed: () => _showAlertDialog(context, vm),
+                          icon: const Icon(Icons.warning_amber_rounded, size: 18),
+                          label: const Text("Send Alert"),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+ Widget _summaryChip(IconData icon, String value, String label, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  void _showAlertDialog(BuildContext context, MapVM vm) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Send Emergency Alert"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Select alert type:", style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+            _alertOption(ctx, vm, "Accident", "accident"),
+            const SizedBox(height: 8),
+            _alertOption(ctx, vm, "Vehicle Failure", "vehicle_failure"),
+            const SizedBox(height: 8),
+            _alertOption(ctx, vm, "Malfunction", "malfunction"),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+        ],
+      ),
+    );
+  }
+
+  Widget _alertOption(BuildContext ctx, MapVM vm, String label, String type) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: () async {
+          Navigator.pop(ctx);
+          await vm.sendAlert(type);
+          if (ctx.mounted) {
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(
+                content: const Text("Alert sent to admin. Stay safe."),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
+        },
+        child: Text(label),
       ),
     );
   }
@@ -931,7 +1036,14 @@ class _GreetingBanner extends StatelessWidget {
     final driver = authVm.currentDriver;
     if (driver == null) return const SizedBox.shrink();
 
-    final firstName = driver.name.split(' ').first;
+    // If name is an email, extract a readable first name from it
+    String rawName = driver.name;
+    if (rawName.contains('@')) {
+      rawName = rawName.split('@').first.replaceAll('.', ' ').replaceAll('_', ' ');
+    }
+    final firstName = rawName.split(' ').first.isNotEmpty
+        ? rawName.split(' ').first[0].toUpperCase() + rawName.split(' ').first.substring(1)
+        : rawName;
     final vm = context.watch<MapVM>();
     final stopCount = vm.currentStops.length;
 

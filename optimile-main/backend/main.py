@@ -52,6 +52,7 @@ _USAGE_LOG     = os.path.join(_BACKEND_DIR, "usage_log.json")
 _ORDERS_CSV    = os.path.join(_BACKEND_DIR, "unified_orders.csv")
 _DRIVERS_JSON  = os.path.join(_BACKEND_DIR, "drivers.json")
 _DASH_FILE     = os.path.join(_BACKEND_DIR, "dashboard.html")
+_ALERTS_FILE   = os.path.join(_BACKEND_DIR, "alerts.json")
 
 # =========================
 # IN-MEMORY STORE (runtime)
@@ -59,6 +60,7 @@ _DASH_FILE     = os.path.join(_BACKEND_DIR, "dashboard.html")
 # Loaded once at startup; PATCH /order/{id}/delivered mutates this
 _orders_store: List[Dict[str, Any]] = []
 _drivers_store: List[Dict[str, Any]] = []
+_alerts_store: List[Dict[str, Any]] = []
 
 def _load_orders():
     global _orders_store
@@ -87,8 +89,19 @@ def _load_drivers():
     with open(_DRIVERS_JSON, encoding="utf-8") as f:
         _drivers_store = json.load(f)
 
+def _load_alerts():
+    global _alerts_store
+    if os.path.exists(_ALERTS_FILE):
+        with open(_ALERTS_FILE, encoding="utf-8") as f:
+            _alerts_store = json.load(f)
+
+def _save_alerts():
+    with open(_ALERTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(_alerts_store, f, indent=2, ensure_ascii=False)
+
 _load_orders()
 _load_drivers()
+_load_alerts()
 
 # =========================
 # AUTH HELPERS
@@ -1584,6 +1597,180 @@ def api_usage(x_api_key: Optional[str] = Header(default=None)):
         "total_calls": len(log),
         "by_company": by_key,
         "recent": log[-10:],
+    }
+
+
+# =====================================================================
+# ALERTS
+# =====================================================================
+
+class AlertRequest(BaseModel):
+    driver_id: str
+    alert_type: str  # "accident" | "vehicle_failure" | "malfunction"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    notes: Optional[str] = None
+
+class ResolveAlertRequest(BaseModel):
+    chosen_driver_id: str
+    mode: str = "all"  # "all" | "urgent_fragile"
+
+@app.post("/api/v1/alert", tags=["Public API"])
+@limiter.limit("50/minute")
+def api_send_alert(request: Request, body: AlertRequest,
+                   x_api_key: Optional[str] = Header(default=None)):
+    """Driver sends an emergency alert. Marks driver unavailable and finds best replacement."""
+    _verify_key(x_api_key)
+
+    # Mark driver as unavailable
+    for d in _drivers_store:
+        if str(d["id"]) == str(body.driver_id):
+            d["status"] = "unavailable"
+            break
+
+    # Get remaining pending stops for this driver
+    from datetime import date as _date
+    today = str(_date.today())
+    remaining = [
+        o for o in _orders_store
+        if str(o.get("driver_id")) == str(body.driver_id)
+        and o.get("status") == "pending"
+        and o.get("delivery_date") == today
+    ]
+
+    fragile_stops = [o for o in remaining if o.get("fragile", "").lower() == "yes"]
+
+    # Find best available driver with vehicle capacity check
+    affected_driver = next((d for d in _drivers_store if str(d["id"]) == str(body.driver_id)), {})
+    affected_vehicle = affected_driver.get("vehicle", "Scooter").lower()
+
+    suggestion = None
+    available_drivers = [
+        d for d in _drivers_store
+        if str(d["id"]) != str(body.driver_id) and d.get("status", "available") == "available"
+    ]
+
+    if available_drivers and remaining:
+        # Score each candidate: prefer less loaded drivers, prefer van if affected was van
+        def driver_score(d):
+            their_pending = sum(
+                1 for o in _orders_store
+                if str(o.get("driver_id")) == str(d["id"])
+                and o.get("status") == "pending"
+                and o.get("delivery_date") == today
+            )
+            vehicle_match = 1 if d.get("vehicle", "").lower() == affected_vehicle else 0
+            return (their_pending, -vehicle_match)
+
+        best = min(available_drivers, key=driver_score)
+        best_vehicle = best.get("vehicle", "Scooter").lower()
+
+        # Capacity check: scooter/motorcycle can't take large packages from a van
+        if affected_vehicle == "van" and best_vehicle in ("scooter", "motorcycle", "car"):
+            transferable = [o for o in remaining if o.get("package_size", "").lower() != "large"]
+            non_transferable = [o for o in remaining if o.get("package_size", "").lower() == "large"]
+        else:
+            transferable = remaining
+            non_transferable = []
+
+        suggestion = {
+            "driver_id": str(best["id"]),
+            "driver_name": best.get("name"),
+            "vehicle": best.get("vehicle"),
+            "transferable_count": len(transferable),
+            "non_transferable_count": len(non_transferable),
+            "note": f"Can take {len(transferable)} of {len(remaining)} stops" +
+                    (f" ({len(non_transferable)} large packages need manual handling)" if non_transferable else ""),
+        }
+
+    alert_id = f"ALT-{int(time.time())}-{body.driver_id}"
+    alert = {
+        "id": alert_id,
+        "driver_id": str(body.driver_id),
+        "driver_name": affected_driver.get("name", "Unknown"),
+        "alert_type": body.alert_type,
+        "lat": body.lat,
+        "lng": body.lng,
+        "notes": body.notes,
+        "timestamp": datetime.utcnow().isoformat(),
+        "status": "active",
+        "remaining_stops": len(remaining),
+        "fragile_stops": len(fragile_stops),
+        "suggestion": suggestion,
+    }
+    _alerts_store.append(alert)
+    _save_alerts()
+
+    return {"alert_id": alert_id, "suggestion": suggestion, "remaining_stops": len(remaining)}
+
+
+@app.get("/api/v1/alerts", tags=["Public API"])
+@limiter.limit("50/minute")
+def api_get_alerts(request: Request, x_api_key: Optional[str] = Header(default=None)):
+    """Get all active alerts for the admin dashboard."""
+    _verify_key(x_api_key)
+    active = [a for a in _alerts_store if a.get("status") == "active"]
+    return {"total": len(active), "alerts": active}
+
+
+@app.post("/api/v1/alert/{alert_id}/resolve", tags=["Public API"])
+@limiter.limit("50/minute")
+def api_resolve_alert(request: Request, alert_id: str, body: ResolveAlertRequest,
+                      x_api_key: Optional[str] = Header(default=None)):
+    """Admin resolves an alert by transferring stops to a chosen driver."""
+    _verify_key(x_api_key)
+
+    alert = next((a for a in _alerts_store if a["id"] == alert_id), None)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found.")
+
+    from datetime import date as _date
+    today = str(_date.today())
+
+    driver_id = alert["driver_id"]
+    chosen_id = str(body.chosen_driver_id)
+
+    # Get stops to transfer
+    remaining = [
+        o for o in _orders_store
+        if str(o.get("driver_id")) == driver_id
+        and o.get("status") == "pending"
+        and o.get("delivery_date") == today
+    ]
+
+    chosen_driver = next((d for d in _drivers_store if str(d["id"]) == chosen_id), None)
+    if not chosen_driver:
+        raise HTTPException(status_code=404, detail="Chosen driver not found.")
+
+    chosen_vehicle = chosen_driver.get("vehicle", "Scooter").lower()
+
+    if body.mode == "urgent_fragile":
+        to_transfer = [o for o in remaining if o.get("fragile", "").lower() == "yes"]
+    elif chosen_vehicle in ("scooter", "motorcycle", "car"):
+        # Can't take large packages
+        to_transfer = [o for o in remaining if o.get("package_size", "").lower() != "large"]
+    else:
+        to_transfer = remaining
+
+    transferred = 0
+    for o in to_transfer:
+        o["driver_id"] = chosen_id
+        o["driver_name"] = chosen_driver.get("name", "")
+        transferred += 1
+
+    _save_orders()
+
+    alert["status"] = "resolved"
+    alert["resolved_by_driver"] = chosen_id
+    alert["resolved_at"] = datetime.utcnow().isoformat()
+    alert["transferred_count"] = transferred
+    _save_alerts()
+
+    return {
+        "alert_id": alert_id,
+        "status": "resolved",
+        "transferred_to": chosen_driver.get("name"),
+        "transferred_count": transferred,
     }
 
 
