@@ -617,6 +617,14 @@ void setUseBellmanFord(bool value) {
 
     await refreshWeather(force: true);
     _ensureWeatherTimer();
+
+    // If stops were already loaded before GPS resolved (race condition on real
+    // devices where GPS takes longer than the backend order fetch), rebuild the
+    // map now so polylines, distance, and ETA are drawn correctly.
+    if (_routes.any((r) => r.stops.isNotEmpty)) {
+      await rebuildMap();
+    }
+
     notifyListeners();
   }
 
