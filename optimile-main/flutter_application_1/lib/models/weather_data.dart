@@ -1,7 +1,6 @@
 /// Live weather reading fetched from OpenWeatherMap.
 ///
 /// [severity]  0.0–1.0 — how badly weather affects driving; drives re-opt weight.
-/// [roadRisk]  0.0–1.0 — probability of road hazard (flooding, ice, low visibility).
 /// [lat]/[lon] — coordinates this reading belongs to (used for cache invalidation).
 class WeatherData {
   const WeatherData({
@@ -14,7 +13,6 @@ class WeatherData {
     required this.condition,
     required this.backendCondition,
     required this.severity,
-    required this.roadRisk,
     required this.fetchedAt,
   });
 
@@ -42,10 +40,6 @@ class WeatherData {
   /// Driving difficulty weight: 0.0 (clear) → 1.0 (extreme storm).
   /// Used as the severity argument when triggering re-optimization.
   final double severity;
-
-  /// Road hazard probability: 0.0 (safe) → 1.0 (flooded / icy roads).
-  /// Sent to the backend so it can penalise exposed or low-lying road segments.
-  final double roadRisk;
 
   /// When this reading was fetched.
   final DateTime fetchedAt;

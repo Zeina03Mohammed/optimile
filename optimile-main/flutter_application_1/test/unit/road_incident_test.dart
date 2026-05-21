@@ -5,7 +5,7 @@
 //   - RoadClassLabel extension: label strings
 //   - RoadClassLabel extension: icon strings
 //   - RoadIncident construction and field storage
-//   - Hazard score boundary values
+//   - dangerScore = weatherSeverity × hazardScore
 //   - Road class threshold behaviour (matches mapvm.dart reroute logic)
 //
 // Run:
@@ -99,6 +99,7 @@ void main() {
       type: 'Flood-prone road',
       description: 'Highway flooded underpass',
       hazardScore: 0.92,
+      dangerScore: 0.644, // 0.70 × 0.92
       delaySeconds: 600,
       fromRoad: 'Ring Road',
       toRoad: '',
@@ -125,6 +126,10 @@ void main() {
       expect(incident.hazardScore, closeTo(0.92, 0.001));
     });
 
+    test('dangerScore stored correctly', () {
+      expect(incident.dangerScore, closeTo(0.644, 0.001));
+    });
+
     test('delaySeconds stored correctly', () {
       expect(incident.delaySeconds, equals(600));
     });
@@ -143,6 +148,55 @@ void main() {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // RoadIncident — dangerScore = weatherSeverity × hazardScore
+  // ─────────────────────────────────────────────────────────────────────────
+
+  group('RoadIncident — dangerScore', () {
+    RoadIncident makeIncident({
+      required double hazardScore,
+      required double dangerScore,
+      RoadClass roadClass = RoadClass.highway,
+    }) => RoadIncident(
+      lat: 30.0, lon: 31.0,
+      type: 'Flood-prone road', description: '',
+      hazardScore: hazardScore,
+      dangerScore: dangerScore,
+      delaySeconds: 0,
+      fromRoad: 'road', toRoad: '',
+      roadClass: roadClass,
+    );
+
+    test('ford in heavy rain: 0.70 × 0.90 = 0.63', () {
+      final inc = makeIncident(hazardScore: 0.90, dangerScore: 0.70 * 0.90);
+      expect(inc.dangerScore, closeTo(0.63, 0.001));
+    });
+
+    test('ford on clear day: 0.00 × 0.90 = 0.00', () {
+      final inc = makeIncident(hazardScore: 0.90, dangerScore: 0.00 * 0.90);
+      expect(inc.dangerScore, equals(0.0));
+    });
+
+    test('unpaved in storm: 0.95 × 0.60 = 0.57', () {
+      final inc = makeIncident(
+        hazardScore: 0.60,
+        dangerScore: 0.95 * 0.60,
+        roadClass: RoadClass.sideRoad,
+      );
+      expect(inc.dangerScore, closeTo(0.57, 0.001));
+    });
+
+    test('dangerScore is always <= hazardScore when severity <= 1.0', () {
+      final inc = makeIncident(hazardScore: 0.80, dangerScore: 0.70 * 0.80);
+      expect(inc.dangerScore, lessThanOrEqualTo(inc.hazardScore));
+    });
+
+    test('dangerScore is in valid range [0, 1]', () {
+      final inc = makeIncident(hazardScore: 0.90, dangerScore: 0.95 * 0.90);
+      expect(inc.dangerScore, inInclusiveRange(0.0, 1.0));
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // RoadIncident — hazard types
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -150,65 +204,60 @@ void main() {
     RoadIncident makeIncident({
       required String type,
       required double hazardScore,
+      required double dangerScore,
       required RoadClass roadClass,
-    }) {
-      return RoadIncident(
-        lat: 30.0,
-        lon: 31.0,
-        type: type,
-        description: type,
-        hazardScore: hazardScore,
-        delaySeconds: 0,
-        fromRoad: 'road',
-        toRoad: '',
-        roadClass: roadClass,
-      );
-    }
+    }) => RoadIncident(
+      lat: 30.0, lon: 31.0,
+      type: type, description: type,
+      hazardScore: hazardScore,
+      dangerScore: dangerScore,
+      delaySeconds: 0,
+      fromRoad: 'road', toRoad: '',
+      roadClass: roadClass,
+    );
 
-    test('flood-prone road on highway — high score', () {
+    test('flood-prone road on highway in heavy rain — danger above threshold', () {
+      // hazard 0.92, severity 0.70 → danger 0.644 > highway threshold 0.50
       final inc = makeIncident(
         type: 'Flood-prone road',
         hazardScore: 0.92,
+        dangerScore: 0.70 * 0.92,
         roadClass: RoadClass.highway,
       );
-      expect(inc.hazardScore, greaterThanOrEqualTo(0.5)); // above highway threshold
+      expect(inc.dangerScore, greaterThanOrEqualTo(0.50));
     });
 
-    test('ford / water crossing on main road', () {
+    test('ford on main road in heavy rain — danger above threshold', () {
+      // hazard 0.90, severity 0.70 → danger 0.63 > main-road threshold 0.60
       final inc = makeIncident(
         type: 'Ford / water crossing',
         hazardScore: 0.90,
+        dangerScore: 0.70 * 0.90,
         roadClass: RoadClass.mainRoad,
       );
-      expect(inc.hazardScore, greaterThanOrEqualTo(0.6)); // above main-road threshold
+      expect(inc.dangerScore, greaterThanOrEqualTo(0.60));
     });
 
-    test('tunnel on side road — above threshold', () {
+    test('ford on main road in drizzle — danger below threshold', () {
+      // hazard 0.90, severity 0.25 → danger 0.225 < main-road threshold 0.60
       final inc = makeIncident(
-        type: 'Tunnel',
-        hazardScore: 0.65,
-        roadClass: RoadClass.sideRoad,
+        type: 'Ford / water crossing',
+        hazardScore: 0.90,
+        dangerScore: 0.25 * 0.90,
+        roadClass: RoadClass.mainRoad,
       );
-      expect(inc.hazardScore, greaterThanOrEqualTo(0.45)); // above tunnel threshold
+      expect(inc.dangerScore, lessThan(0.60));
     });
 
-    test('unpaved side road — below reroute threshold', () {
+    test('unpaved side road below reroute threshold even in heavy rain', () {
+      // hazard 0.38, severity 0.70 → danger 0.266 < side-road threshold 0.40
       final inc = makeIncident(
         type: 'Unpaved road',
         hazardScore: 0.38,
+        dangerScore: 0.70 * 0.38,
         roadClass: RoadClass.sideRoad,
       );
-      // 0.38 < 0.40 → should NOT trigger reroute
-      expect(inc.hazardScore, lessThan(0.40));
-    });
-
-    test('hazardScore is in valid range [0, 1]', () {
-      final inc = makeIncident(
-        type: 'Sandy surface',
-        hazardScore: 0.70,
-        roadClass: RoadClass.sideRoad,
-      );
-      expect(inc.hazardScore, inInclusiveRange(0.0, 1.0));
+      expect(inc.dangerScore, lessThan(0.40));
     });
   });
 
@@ -217,61 +266,70 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
 
   group('RoadIncident — reroute threshold logic', () {
-    double _threshold(RoadClass cls, String type) {
-      return switch (cls) {
-        RoadClass.sideRoad => type == 'Tunnel' ? 0.45 : 0.40,
-        RoadClass.mainRoad => 0.60,
-        RoadClass.highway  => 0.50,
-        RoadClass.unknown  => 0.65,
-      };
-    }
+    double threshold(RoadClass cls, String type) => switch (cls) {
+      RoadClass.sideRoad => type == 'Tunnel' ? 0.45 : 0.40,
+      RoadClass.mainRoad => 0.60,
+      RoadClass.highway  => 0.50,
+      RoadClass.unknown  => 0.65,
+    };
 
     test('highway threshold is 0.50', () {
-      expect(_threshold(RoadClass.highway, 'flood'), closeTo(0.50, 0.001));
+      expect(threshold(RoadClass.highway, 'flood'), closeTo(0.50, 0.001));
     });
 
     test('main road threshold is 0.60', () {
-      expect(_threshold(RoadClass.mainRoad, 'flood'), closeTo(0.60, 0.001));
+      expect(threshold(RoadClass.mainRoad, 'flood'), closeTo(0.60, 0.001));
     });
 
     test('side road threshold is 0.40', () {
-      expect(_threshold(RoadClass.sideRoad, 'flood'), closeTo(0.40, 0.001));
+      expect(threshold(RoadClass.sideRoad, 'flood'), closeTo(0.40, 0.001));
     });
 
     test('tunnel on side road threshold is 0.45', () {
-      expect(_threshold(RoadClass.sideRoad, 'Tunnel'), closeTo(0.45, 0.001));
+      expect(threshold(RoadClass.sideRoad, 'Tunnel'), closeTo(0.45, 0.001));
     });
 
     test('unknown road threshold is 0.65', () {
-      expect(_threshold(RoadClass.unknown, 'flood'), closeTo(0.65, 0.001));
+      expect(threshold(RoadClass.unknown, 'flood'), closeTo(0.65, 0.001));
     });
 
-    test('highway incident above threshold triggers reroute', () {
+    test('highway incident: dangerScore above threshold triggers reroute', () {
       const inc = RoadIncident(
         lat: 30.0, lon: 31.0,
-        type: 'Flood-prone road',
-        description: '',
+        type: 'Flood-prone road', description: '',
         hazardScore: 0.92,
+        dangerScore: 0.644, // 0.70 × 0.92
         delaySeconds: 600,
-        fromRoad: 'Ring Road',
-        toRoad: '',
+        fromRoad: 'Ring Road', toRoad: '',
         roadClass: RoadClass.highway,
       );
-      expect(inc.hazardScore >= 0.50, isTrue);
+      expect(inc.dangerScore >= 0.50, isTrue);
     });
 
-    test('side road incident below threshold does NOT trigger reroute', () {
+    test('side road: dangerScore below threshold does NOT trigger reroute', () {
       const inc = RoadIncident(
         lat: 30.0, lon: 31.0,
-        type: 'Unpaved road',
-        description: '',
+        type: 'Unpaved road', description: '',
         hazardScore: 0.38,
+        dangerScore: 0.266, // 0.70 × 0.38
         delaySeconds: 120,
-        fromRoad: 'Side road',
-        toRoad: '',
+        fromRoad: 'Side road', toRoad: '',
         roadClass: RoadClass.sideRoad,
       );
-      expect(inc.hazardScore < 0.40, isTrue);
+      expect(inc.dangerScore < 0.40, isTrue);
+    });
+
+    test('clear day: dangerScore is zero regardless of hazardScore', () {
+      const inc = RoadIncident(
+        lat: 30.0, lon: 31.0,
+        type: 'Ford / water crossing', description: '',
+        hazardScore: 0.90,
+        dangerScore: 0.0, // severity 0.0 × 0.90
+        delaySeconds: 0,
+        fromRoad: 'ford road', toRoad: '',
+        roadClass: RoadClass.highway,
+      );
+      expect(inc.dangerScore, equals(0.0));
     });
   });
 }

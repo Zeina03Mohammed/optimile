@@ -31,6 +31,7 @@ class RoadIncident {
     required this.type,
     required this.description,
     required this.hazardScore,
+    required this.dangerScore,
     required this.delaySeconds,
     required this.fromRoad,
     required this.toRoad,
@@ -49,6 +50,10 @@ class RoadIncident {
 
   /// 0.0–1.0 hazard weight — scaled by both hazard type AND road class.
   final double hazardScore;
+
+  /// 0.0–1.0 combined danger: hazardScore × weather severity.
+  /// Zero on a clear day, full hazardScore in the worst weather.
+  final double dangerScore;
 
   /// Estimated extra delay in seconds (0 for OSM-sourced data).
   final int delaySeconds;

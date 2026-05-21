@@ -168,13 +168,6 @@ class _MapView extends StatelessWidget {
               ),
             ),
 
-          // ========== WEATHER CHIP ==========
-          if (vm.weatherData != null && !vm.showSearchBar)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              right: 60,
-              child: _WeatherChip(vm: vm),
-            ),
 
           // ========== EVENT LOG (during navigation) ==========
           if (vm.navigationStarted && vm.eventLog.isNotEmpty)
@@ -901,9 +894,67 @@ class _MapView extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.water_damage, size: 18),
                 label: const Text('Simulate Road Hazard'),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.of(context).pop();
-                  vm.simulateRoadHazard(context);
+                  double pickedSeverity = 0.70;
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) {
+                      return StatefulBuilder(
+                        builder: (ctx, setState) {
+                          final label = pickedSeverity < 0.10
+                              ? 'Clear'
+                              : pickedSeverity < 0.35
+                                  ? 'Mist / Light drizzle'
+                                  : pickedSeverity < 0.55
+                                      ? 'Moderate rain'
+                                      : pickedSeverity < 0.75
+                                          ? 'Heavy rain'
+                                          : pickedSeverity < 0.90
+                                              ? 'Storm'
+                                              : 'Extreme / Tornado';
+                          return AlertDialog(
+                            backgroundColor: Colors.grey.shade900,
+                            title: const Text('Set Weather Severity',
+                                style: TextStyle(color: Colors.white)),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '$label  (${(pickedSeverity * 100).toStringAsFixed(0)}%)',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                                Slider(
+                                  value: pickedSeverity,
+                                  min: 0.0,
+                                  max: 1.0,
+                                  divisions: 20,
+                                  activeColor: Colors.redAccent,
+                                  onChanged: (v) => setState(() => pickedSeverity = v),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel',
+                                    style: TextStyle(color: Colors.white54)),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red.shade700),
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Simulate'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                  if (confirmed == true && context.mounted) {
+                    vm.simulateRoadHazard(context, weatherSeverity: pickedSeverity);
+                  }
                 },
               ),
             ),
@@ -936,13 +987,14 @@ class _WeatherChip extends StatelessWidget {
   const _WeatherChip({required this.vm});
   final MapVM vm;
 
-  static IconData _iconFor(String condition) {
+  static IconData iconFor(String condition) {
     final c = condition.toLowerCase();
     if (c.contains('storm') || c.contains('thunder')) return Icons.thunderstorm;
-    if (c.contains('snow')) return Icons.ac_unit;
-    if (c.contains('fog') || c.contains('haze')) return Icons.foggy;
-    if (c.contains('rain') || c.contains('drizzle')) return Icons.umbrella;
-    if (c.contains('cloud')) return Icons.cloud;
+    if (c.contains('snow') || c.contains('sleet') || c.contains('ice')) return Icons.ac_unit;
+    if (c.contains('fog') || c.contains('haze') || c.contains('mist')) return Icons.foggy;
+    if (c.contains('rain') || c.contains('drizzle') || c.contains('shower')) return Icons.umbrella;
+    if (c.contains('few') || c.contains('scattered') || c.contains('partly')) return Icons.wb_cloudy;
+    if (c.contains('cloud') || c.contains('overcast') || c.contains('broken')) return Icons.cloud;
     if (c.contains('night')) return Icons.nightlight_round;
     return Icons.wb_sunny;
   }
@@ -950,10 +1002,11 @@ class _WeatherChip extends StatelessWidget {
   static Color _colorFor(String condition) {
     final c = condition.toLowerCase();
     if (c.contains('storm') || c.contains('thunder')) return Colors.deepPurple.shade700;
-    if (c.contains('snow')) return Colors.lightBlue.shade200;
-    if (c.contains('fog') || c.contains('haze')) return Colors.blueGrey.shade400;
-    if (c.contains('rain') || c.contains('drizzle')) return Colors.indigo.shade400;
-    if (c.contains('cloud')) return Colors.blueGrey.shade600;
+    if (c.contains('snow') || c.contains('sleet') || c.contains('ice')) return Colors.lightBlue.shade200;
+    if (c.contains('fog') || c.contains('haze') || c.contains('mist')) return Colors.blueGrey.shade400;
+    if (c.contains('rain') || c.contains('drizzle') || c.contains('shower')) return Colors.indigo.shade400;
+    if (c.contains('few') || c.contains('scattered') || c.contains('partly')) return Colors.orange.shade400;
+    if (c.contains('cloud') || c.contains('overcast') || c.contains('broken')) return Colors.blueGrey.shade600;
     if (c.contains('night')) return Colors.indigo.shade900;
     return Colors.orange.shade600;
   }
@@ -961,7 +1014,7 @@ class _WeatherChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = vm.weatherData!;
-    final icon = _iconFor(w.condition);
+    final icon = _WeatherChip.iconFor(w.condition);
     final color = _colorFor(w.condition);
 
     return GestureDetector(
@@ -989,7 +1042,7 @@ class _WeatherChip extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  "${w.tempC.toStringAsFixed(1)}°C",
+                  "${w.tempC.round()}°C",
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -1020,6 +1073,19 @@ class _WeatherChip extends StatelessWidget {
     );
   }
 }
+
+Widget _weatherRow(String emoji, String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          const Spacer(),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
 
 // ── GREETING BANNER ──────────────────────────────────────────────────
 class _GreetingBanner extends StatelessWidget {
@@ -1077,8 +1143,62 @@ class _GreetingBanner extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (stopCount > 0) ...[
-            const SizedBox(width: 8),
+          const SizedBox(width: 8),
+          if (vm.weatherData != null)
+            GestureDetector(
+              onTap: () {
+                final w = vm.weatherData!;
+                showDialog<void>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    backgroundColor: Colors.grey.shade900,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(w.condition,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        _weatherRow('🌡️', 'Temperature', '${w.tempC.round()}°C'),
+                        _weatherRow('🤔', 'Feels like', '${w.feelsLikeC.round()}°C'),
+                        _weatherRow('💧', 'Humidity', '${w.humidity}%'),
+                        _weatherRow('💨', 'Wind', '${w.windSpeedKmh.toStringAsFixed(0)} km/h'),
+                        _weatherRow('⚠️', 'Driving severity', '${(w.severity * 100).toStringAsFixed(0)}%'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_WeatherChip.iconFor(vm.weatherData!.condition),
+                        size: 12, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${vm.weatherData!.tempC.round()}°C',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (stopCount > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
@@ -1094,7 +1214,6 @@ class _GreetingBanner extends StatelessWidget {
                 ),
               ),
             ),
-          ],
         ],
       ),
     );

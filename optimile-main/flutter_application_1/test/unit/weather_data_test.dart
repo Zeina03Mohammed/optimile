@@ -3,7 +3,7 @@
 // Covers:
 //   - WeatherData construction with all required fields
 //   - Field value storage and retrieval
-//   - Boundary values: severity/roadRisk clamped to [0.0, 1.0]
+//   - Boundary values: severity clamped to [0.0, 1.0]
 //   - Timestamp stored correctly
 //
 // Run:
@@ -27,7 +27,6 @@ void main() {
     String condition = 'Clear',
     String backendCondition = 'Sunny',
     double severity = 0.1,
-    double roadRisk = 0.05,
     DateTime? fetchedAt,
   }) {
     return WeatherData(
@@ -40,7 +39,6 @@ void main() {
       condition: condition,
       backendCondition: backendCondition,
       severity: severity,
-      roadRisk: roadRisk,
       fetchedAt: fetchedAt ?? DateTime(2026, 1, 1, 8, 0),
     );
   }
@@ -61,7 +59,6 @@ void main() {
       expect(wd.condition, equals('Clear'));
       expect(wd.backendCondition, equals('Sunny'));
       expect(wd.severity, equals(0.1));
-      expect(wd.roadRisk, equals(0.05));
     });
 
     test('fetchedAt is stored correctly', () {
@@ -93,22 +90,6 @@ void main() {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Road risk values
-  // ─────────────────────────────────────────────────────────────────────────
-
-  group('WeatherData — roadRisk', () {
-    test('zero road risk (dry roads)', () {
-      final wd = makeWeatherData(roadRisk: 0.0);
-      expect(wd.roadRisk, equals(0.0));
-    });
-
-    test('maximum road risk (flooded roads)', () {
-      final wd = makeWeatherData(roadRisk: 1.0);
-      expect(wd.roadRisk, equals(1.0));
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
   // Condition strings
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -119,14 +100,13 @@ void main() {
       expect(wd.backendCondition, equals('Foggy'));
     });
 
-    test('storm conditions', () {
+    test('storm conditions severity', () {
       final wd = makeWeatherData(
         condition: 'Heavy thunderstorm',
         backendCondition: 'Storm',
         severity: 0.9,
-        roadRisk: 0.85,
       );
-      expect(wd.severity, greaterThan(wd.roadRisk));
+      expect(wd.severity, greaterThan(0.5));
     });
 
     test('rainy backend condition', () {
@@ -184,12 +164,12 @@ void main() {
       final wd1 = WeatherData(
         lat: 30.0, lon: 31.0, tempC: 25.0, feelsLikeC: 25.0, humidity: 50,
         windSpeedKmh: 10.0, condition: 'Clear', backendCondition: 'Sunny',
-        severity: 0.1, roadRisk: 0.1, fetchedAt: ts,
+        severity: 0.1, fetchedAt: ts,
       );
       final wd2 = WeatherData(
         lat: 30.0, lon: 31.0, tempC: 25.0, feelsLikeC: 25.0, humidity: 50,
         windSpeedKmh: 10.0, condition: 'Clear', backendCondition: 'Sunny',
-        severity: 0.1, roadRisk: 0.1, fetchedAt: ts,
+        severity: 0.1, fetchedAt: ts,
       );
       expect(wd1.tempC, equals(wd2.tempC));
       expect(wd1.severity, equals(wd2.severity));
