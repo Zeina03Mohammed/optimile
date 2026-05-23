@@ -1,3 +1,10 @@
+/// Where the hazard was detected.
+enum HazardSource { osm, directions }
+
+extension HazardSourceLabel on HazardSource {
+  String get label => this == HazardSource.osm ? 'OSM' : 'Directions';
+}
+
 /// Road class derived from OSM's `highway` tag.
 /// Used to distinguish how critical a hazard is based on road importance.
 enum RoadClass {
@@ -36,6 +43,7 @@ class RoadIncident {
     required this.fromRoad,
     required this.toRoad,
     required this.roadClass,
+    this.source = HazardSource.osm,
   });
 
   /// Incident coordinates.
@@ -66,4 +74,7 @@ class RoadIncident {
 
   /// Road classification derived from OSM highway tag.
   final RoadClass roadClass;
+
+  /// Which data source detected this hazard.
+  final HazardSource source;
 }

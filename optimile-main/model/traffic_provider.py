@@ -55,7 +55,11 @@ out center tags;
         resp = requests.post(
             _OVERPASS_URL,
             data=query,
-            headers={"Content-Type": "text/plain"},
+            headers={
+                "Content-Type": "text/plain",
+                "Accept": "*/*",
+                "User-Agent": "optimile-backend/1.0",
+            },
             timeout=_TIMEOUT_S,
         )
         resp.raise_for_status()
@@ -92,11 +96,14 @@ out center tags;
         if best_idx is None:
             continue
 
-        mapped.append({
-            "index":    int(best_idx),
-            "kind":     kind,
-            "severity": float(severity),
-        })
+        existing = next((m for m in mapped if m["index"] == best_idx), None)
+        if existing is None:
+            mapped.append({"index": int(best_idx), "kind": kind, "severity": float(severity)})
+        elif severity > existing["severity"] or (
+            severity == existing["severity"] and kind == "road_closed"
+        ):
+            existing["kind"] = kind
+            existing["severity"] = float(severity)
 
     if mapped:
         print(f"[TRAFFIC] OSM hazards mapped={mapped}")

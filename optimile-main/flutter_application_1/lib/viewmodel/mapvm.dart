@@ -414,28 +414,24 @@ bool isFragile = false;
       currentLocation: currentLocation!,
       stops: routePoints,
       weatherSeverity: weatherData?.severity ?? 0.0,
+      routePolyline: _routePolylinePoints(),
     );
     roadIncidents = incidents;
 
     // ── Log each incident with road-class-aware detail ──────────────────────
     for (final inc in incidents) {
       final hazardIcon = _hazardIcon(inc.type);
-      final classIcon  = inc.roadClass.icon;      // 🛣️ / 🚗 / 🛤️
-      final classLabel = inc.roadClass.label;     // Highway / Main road / Side road
+      final classIcon  = inc.roadClass.icon;
+      final classLabel = inc.roadClass.label;
       final road       = inc.fromRoad.isNotEmpty ? inc.fromRoad : 'route';
       final pct        = (inc.dangerScore * 100).toStringAsFixed(0);
+      final srcLabel   = inc.source.label;
       addEvent(
         '$hazardIcon$classIcon',
-        _xaiEvent(
-          trigger: "hazard scan",
-          evidence: '$classLabel "$road" $pct%',
-          decision: "monitor",
-          method: inc.type,
-          severity: inc.dangerScore,
-        ),
+        '[$srcLabel] $classLabel "$road" — ${inc.type} $pct%',
         category: XaiCategory.hazard,
         confidence: _xaiConfidence(method: inc.type, severity: inc.dangerScore),
-        causalChain: "OSM scan → $classLabel ${inc.type} detected → danger ${inc.dangerScore.toStringAsFixed(2)}",
+        causalChain: "$srcLabel → $classLabel ${inc.type} detected → danger ${inc.dangerScore.toStringAsFixed(2)}",
       );
     }
 
@@ -465,10 +461,10 @@ bool isFragile = false;
 
     for (final inc in incidents) {
       final threshold = switch (inc.roadClass) {
-        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
-        RoadClass.mainRoad => 0.60,
-        RoadClass.highway  => 0.50,
-        RoadClass.unknown  => 0.65,
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.35 : 0.30,
+        RoadClass.mainRoad => 0.35,
+        RoadClass.highway  => 0.30,
+        RoadClass.unknown  => 0.35,
       };
 
       if (inc.dangerScore >= threshold &&
@@ -509,6 +505,11 @@ bool isFragile = false;
       ),
     );
   }
+
+  List<LatLng> _routePolylinePoints() => polylines
+      .where((p) => p.polylineId.value.startsWith('poly_r'))
+      .expand((p) => p.points)
+      .toList();
 
   static String _hazardIcon(String type) => switch (type) {
     'Flood-prone road'      => '🌊',
@@ -1716,6 +1717,7 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
       currentLocation: currentLocation!,
       stops: routePoints,
       weatherSeverity: weatherSeverity,
+      routePolyline: _routePolylinePoints(),
     );
 
     if (incidents.isEmpty) {
@@ -1740,31 +1742,34 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
         .map((i) => i.dangerScore)
         .reduce((a, b) => a > b ? a : b);
 
-    // ── 2. Log each detected OSM incident ────────────────────────────────────
+    // ── 2. Log only the incident that triggers the reroute ───────────────────
+    RoadIncident? simTrigger;
+    double simTriggerSeverity = 0;
     for (final inc in incidents) {
-      final hazardIcon = _hazardIcon(inc.type);
-      final classIcon  = inc.roadClass.icon;
-      final classLabel = inc.roadClass.label;
-      final pct        = (inc.dangerScore * 100).toStringAsFixed(0);
-      final threshold  = switch (inc.roadClass) {
-        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
-        RoadClass.mainRoad => 0.60,
-        RoadClass.highway  => 0.50,
-        RoadClass.unknown  => 0.65,
+      final threshold = switch (inc.roadClass) {
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.35 : 0.30,
+        RoadClass.mainRoad => 0.35,
+        RoadClass.highway  => 0.30,
+        RoadClass.unknown  => 0.35,
       };
-      final willReroute = inc.dangerScore >= threshold;
+      if (inc.dangerScore >= threshold && inc.dangerScore > simTriggerSeverity) {
+        simTrigger = inc;
+        simTriggerSeverity = inc.dangerScore;
+      }
+    }
+    if (simTrigger != null) {
+      final hazardIcon = _hazardIcon(simTrigger.type);
+      final classIcon  = simTrigger.roadClass.icon;
+      final classLabel = simTrigger.roadClass.label;
+      final pct        = (simTrigger.dangerScore * 100).toStringAsFixed(0);
+      final srcLabel   = simTrigger.source.label;
+      final road       = simTrigger.fromRoad.isNotEmpty ? simTrigger.fromRoad : 'route';
       addEvent(
         '$hazardIcon$classIcon',
-        _xaiEvent(
-          trigger: "sim hazard",
-          evidence: '$classLabel "${inc.fromRoad}" $pct%',
-          decision: willReroute ? "reroute candidate" : "monitor",
-          method: inc.type,
-          severity: inc.dangerScore,
-        ),
+        '[$srcLabel] $classLabel "$road" — ${simTrigger.type} $pct%',
         category: XaiCategory.hazard,
-        confidence: _xaiConfidence(method: inc.type, severity: inc.dangerScore),
-        causalChain: "OSM scan → $classLabel ${inc.type} ${pct}% → ${willReroute ? "reroute triggered" : "below threshold"}",
+        confidence: _xaiConfidence(method: simTrigger.type, severity: simTrigger.dangerScore),
+        causalChain: "$srcLabel → $classLabel ${simTrigger.type} $pct% → reroute triggered",
       );
     }
 
@@ -1795,22 +1800,26 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
       origin = stop.location;
     }
 
-    // ── 4. Call backend — only pass incidents that cross their road-class threshold
+    // ── 4. Call backend — only when something crosses its reroute threshold ──
     final triggeringIncidents = incidents.where((inc) {
       final threshold = switch (inc.roadClass) {
-        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.45 : 0.40,
-        RoadClass.mainRoad => 0.60,
-        RoadClass.highway  => 0.50,
-        RoadClass.unknown  => 0.65,
+        RoadClass.sideRoad => inc.type == 'Tunnel' ? 0.35 : 0.30,
+        RoadClass.mainRoad => 0.35,
+        RoadClass.highway  => 0.30,
+        RoadClass.unknown  => 0.35,
       };
       return inc.dangerScore >= threshold;
     }).toList();
 
-    final worstScore = triggeringIncidents.isEmpty
-        ? 0.5
-        : triggeringIncidents
-            .map((i) => i.dangerScore)
-            .reduce((a, b) => a > b ? a : b);
+    if (triggeringIncidents.isEmpty) {
+      _isReoptimizing = false;
+      notifyListeners();
+      return;
+    }
+
+    final worstScore = triggeringIncidents
+        .map((i) => i.dangerScore)
+        .reduce((a, b) => a > b ? a : b);
 
     final payload = {
       'current_lat': currentLocation!.latitude,

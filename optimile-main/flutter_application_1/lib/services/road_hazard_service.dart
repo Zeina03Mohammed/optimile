@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../models/road_incident.dart';
@@ -29,6 +30,7 @@ class RoadHazardService {
     required LatLng currentLocation,
     required List<LatLng> stops,
     required double weatherSeverity,
+    List<LatLng> routePolyline = const [],
   }) async {
     // Run both sources in parallel
     final results = await Future.wait([
@@ -36,6 +38,7 @@ class RoadHazardService {
         currentLocation: currentLocation,
         stops: stops,
         weatherSeverity: weatherSeverity,
+        routePolyline: routePolyline,
       ),
       _fetchDirectionsHazards(
         currentLocation: currentLocation,
@@ -53,17 +56,26 @@ class RoadHazardService {
     required LatLng currentLocation,
     required List<LatLng> stops,
     required double weatherSeverity,
+    List<LatLng> routePolyline = const [],
   }) async {
-    final bbox = _buildBbox(currentLocation, stops);
+    final String area;
+    if (routePolyline.isNotEmpty) {
+      final sampled = _samplePolyline(routePolyline, 200);
+      final coords  = sampled.map((p) => '${p.latitude},${p.longitude}').join(',');
+      area = '(around:100,$coords)';
+    } else {
+      final bbox = _buildBbox(currentLocation, stops);
+      area = '(${bbox.s},${bbox.w},${bbox.n},${bbox.e})';
+    }
 
     final query = '''
 [out:json][timeout:14];
 (
-  way["flood_prone"="yes"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});
-  way["highway"="ford"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});
-  way["tunnel"="yes"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});
-  way["surface"~"^(unpaved|dirt|gravel|mud|sand|ground|grass)\$"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});
-  node["ford"="yes"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});
+  way["flood_prone"="yes"]$area;
+  way["highway"="ford"]$area;
+  way["tunnel"="yes"]$area;
+  way["surface"~"^(unpaved|dirt|gravel|mud|sand|ground|grass)\$"]$area;
+  node["ford"="yes"]$area;
 );
 out center tags;
 ''';
@@ -72,7 +84,11 @@ out center tags;
       final response = await http
           .post(
             Uri.parse(_osmEndpoint),
-            headers: {'Content-Type': 'text/plain'},
+            headers: {
+              'Content-Type': 'text/plain',
+              'Accept': '*/*',
+              'User-Agent': 'optimile-app/1.0',
+            },
             body: query,
           )
           .timeout(_timeout);
@@ -204,6 +220,7 @@ out center tags;
         fromRoad: roadName,
         toRoad: '',
         roadClass: roadClass,
+        source: HazardSource.directions,
       ));
     }
 
@@ -277,6 +294,7 @@ out center tags;
         fromRoad: roadName,
         toRoad: '',
         roadClass: roadClass,
+        source: HazardSource.osm,
       );
     } catch (_) {
       return null;
@@ -348,5 +366,31 @@ out center tags;
       w: lons.reduce((a, b) => a < b ? a : b) - _bboxPad,
       e: lons.reduce((a, b) => a > b ? a : b) + _bboxPad,
     );
+  }
+
+  static List<LatLng> _samplePolyline(List<LatLng> points, double intervalM) {
+    if (points.isEmpty) return points;
+    final sampled = <LatLng>[points.first];
+    double accumulated = 0;
+    for (int i = 1; i < points.length; i++) {
+      accumulated += _haversineM(points[i - 1], points[i]);
+      if (accumulated >= intervalM) {
+        sampled.add(points[i]);
+        accumulated = 0;
+      }
+    }
+    if (sampled.last != points.last) sampled.add(points.last);
+    return sampled;
+  }
+
+  static double _haversineM(LatLng a, LatLng b) {
+    const R = 6371000.0;
+    final dLat = (b.latitude  - a.latitude)  * math.pi / 180;
+    final dLon = (b.longitude - a.longitude) * math.pi / 180;
+    final x = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(a.latitude * math.pi / 180) *
+        math.cos(b.latitude * math.pi / 180) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    return R * 2 * math.asin(math.sqrt(x));
   }
 }
