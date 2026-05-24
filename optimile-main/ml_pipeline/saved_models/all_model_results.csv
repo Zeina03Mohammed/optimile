@@ -1,5 +1,5 @@
 model_name,cv_mae_mean,cv_mae_std,cv_rmse_mean,cv_r2_mean
-HistGradientBoosting,3.643,0.152,5.874,0.8219
-GradientBoosting,3.705,0.162,5.958,0.8171
-RandomForest,4.324,0.128,6.657,0.7711
-ElasticNet,6.996,0.193,10.572,0.4246
+HistGradientBoosting,2.276,0.147,5.155,0.9486
+GradientBoosting,2.363,0.129,5.197,0.9477
+RandomForest,3.291,0.168,6.269,0.9243
+ElasticNet,10.276,0.172,14.312,0.6084

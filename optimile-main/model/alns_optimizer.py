@@ -72,6 +72,8 @@ def route_cost(
         "Normal": 1.0,
         "Medium": 1.15,
         "Heavy": 1.35,
+        "High": 1.60,
+        "Jam": 1.90,
     }.get(traffic_level, 1.0)
 
     for i in range(len(route) - 1):
@@ -362,15 +364,8 @@ def optimize_route(
         T *= 0.995
 
     if explain:
-        print(
-            "[ALNS] final best_cost={:.3f} iters={} last_improvement={}".format(
-                best_cost,
-                iters,
-                last_improving,
-            )
-        )
         try:
-            explain_route(
+            xai = explain_route(
                 best,
                 coords=coords,
                 fragile_flags=fragile_flags,
@@ -379,7 +374,8 @@ def optimize_route(
                 context=context,
             )
         except Exception as exc:  # defensive: never break optimization on logging
-            print(f"[ALNS] explain_route failed: {exc}")
+            xai = {"error": str(exc)}
+        return best, best_cost, xai
 
     return best, best_cost
 
@@ -391,18 +387,17 @@ def explain_route(
     time_windows,
     start_time_min,
     context,
-):
+) -> dict:
     """
-    Explain the cost composition of a given route.
+    Returns a structured XAI audit record for the given route.
 
-    This mirrors `route_cost` but prints per-leg contributions:
-      - base travel time (ETA)
-      - waiting and late penalties
-      - fragile penalties
-      - incident penalties
-      - smoothness (angle) penalties
+    Keys:
+      counterfactual -- plain-English explanation of the routing decision
+      confidence     -- HIGH / MEDIUM / LOW based on incident severity and savings
+      event_log      -- list of per-leg event dicts with cost breakdown
+      savings_min    -- estimated minutes saved vs. reverse-order counterfactual
+      total_cost     -- total computed route cost
     """
-
     time = start_time_min
     vehicle = context.get("vehicle", "van")
     speed = vehicle_speed(vehicle)
@@ -410,21 +405,14 @@ def explain_route(
     incident = context.get("incident")
 
     traffic_multiplier = {
-        "Low": 0.9,
-        "Normal": 1.0,
-        "Medium": 1.15,
-        "Heavy": 1.35,
+        "Low": 0.9, "Normal": 1.0, "Medium": 1.15,
+        "Heavy": 1.35, "High": 1.60, "Jam": 1.90,
     }.get(traffic_level, 1.0)
 
     total_cost = 0.0
-    print(
-        "[ROUTE EXPLAIN] vehicle={} traffic={} start_time_min={}".format(
-            vehicle, traffic_level, start_time_min
-        )
-    )
-    print(
-        " idx_from -> idx_to | base(min) wait late fragile incident smooth | cumulative_cost"
-    )
+    event_log = []
+    worst_incident_leg = None
+    worst_incident_delay = 0.0
 
     for i in range(len(route) - 1):
         from_idx = route[i]
@@ -435,7 +423,6 @@ def explain_route(
         leg_dist = dist(a, b)
         formula_travel = (leg_dist / speed) * traffic_multiplier
 
-        # ML hybrid (mirrors route_cost logic — O(1) matrix lookup)
         ml_travel = None
         ml_matrix = context.get("ml_cost_matrix")
         if ml_matrix is not None:
@@ -448,46 +435,60 @@ def explain_route(
         else:
             base_travel = formula_travel
 
+        leg_events = []
+        leg_cost = base_travel
+        incident_pen = 0.0
         wait_pen = 0.0
         late_pen = 0.0
         fragile_pen = 0.0
-        incident_pen = 0.0
         smooth_pen = 0.0
 
         time += base_travel
         total_cost += base_travel
 
-        # Incident penalty (if any)
         if incident and to_idx == incident.get("index"):
             kind = incident.get("kind")
             severity = float(incident.get("severity", 1.0))
             if kind == "traffic_jam":
-                incident_pen += severity * 35
+                incident_pen = severity * 35
             elif kind == "accident":
-                incident_pen += severity * 60
+                incident_pen = severity * 60
             elif kind == "road_closed":
-                incident_pen += 200
+                incident_pen = 200
             total_cost += incident_pen
+            leg_cost += incident_pen
+            leg_events.append({
+                "type": kind,
+                "severity": severity,
+                "delay_min": round(incident_pen, 1),
+                "stop": to_idx,
+            })
+            if incident_pen > worst_incident_delay:
+                worst_incident_delay = incident_pen
+                worst_incident_leg = (from_idx, to_idx, kind, incident_pen)
 
-        # Time windows
         win_start, win_end = time_windows[to_idx]
         if win_start is not None and time < win_start:
             wait = win_start - time
-            wait_pen += wait * 0.2
+            wait_pen = wait * 0.2
             total_cost += wait_pen
+            leg_cost += wait_pen
             time = win_start
+            leg_events.append({"type": "wait", "delay_min": round(wait, 1), "stop": to_idx})
 
         if win_end is not None and time > win_end:
             late = time - win_end
-            late_pen += late * 6.0
+            late_pen = late * 6.0
             total_cost += late_pen
+            leg_cost += late_pen
+            leg_events.append({"type": "late_arrival", "delay_min": round(late, 1), "stop": to_idx})
 
-        # Fragile stop penalty
         if fragile_flags[to_idx]:
-            fragile_pen += 2.0 * base_travel
+            fragile_pen = 2.0 * base_travel
             total_cost += fragile_pen
+            leg_cost += fragile_pen
+            leg_events.append({"type": "fragile", "stop": to_idx})
 
-        # Smoothness penalties
         if i >= 2:
             p0 = coords[route[i - 1]]
             p1 = a
@@ -499,17 +500,64 @@ def explain_route(
             if mag > 0:
                 angle = math.degrees(math.acos(max(-1, min(1, dot / mag))))
                 if angle < 45:
-                    smooth_pen += 0.3 * leg_dist
+                    smooth_pen = 0.3 * leg_dist
                     total_cost += smooth_pen
+                    leg_cost += smooth_pen
 
-        print(
-            f" {from_idx:7d} -> {to_idx:6d} | "
-            f"{base_travel:8.3f} {wait_pen:4.2f} {late_pen:4.2f} "
-            f"{fragile_pen:7.2f} {incident_pen:8.2f} {smooth_pen:6.2f} | "
-            f"{total_cost:15.3f}"
+        event_log.append({
+            "leg": f"{from_idx}->{to_idx}",
+            "base_travel_min": round(base_travel, 2),
+            "total_leg_cost": round(leg_cost, 2),
+            "events": leg_events,
+        })
+
+    # Savings vs. reverse-order counterfactual
+    reverse_route = list(reversed(route))
+    try:
+        reverse_cost = route_cost(
+            reverse_route, coords, fragile_flags, time_windows, start_time_min, context
+        )
+        savings_min = round(reverse_cost - total_cost, 1)
+    except Exception:
+        savings_min = 0.0
+
+    # Confidence: driven by worst incident severity or absolute savings
+    if worst_incident_delay >= 50 or savings_min >= 15:
+        confidence = "HIGH"
+    elif worst_incident_delay >= 15 or savings_min >= 5:
+        confidence = "MEDIUM"
+    else:
+        confidence = "LOW"
+
+    # Plain-English counterfactual
+    if worst_incident_leg:
+        fi, ti, kind, delay = worst_incident_leg
+        free_flow = max(total_cost - delay, 1e-6)
+        pct_over = int(round((delay / free_flow) * 100))
+        counterfactual = (
+            f"Without rerouting, leg {fi}->{ti} runs +{pct_over}% over free-flow time "
+            f"({delay:.1f} min delay, {kind}). "
+            f"Rerouting saves ~{max(savings_min, 0):.0f} min. "
+            f"Confidence: {confidence}."
+        )
+    elif savings_min > 0:
+        counterfactual = (
+            f"Optimized route saves ~{savings_min:.0f} min over reverse-order baseline. "
+            f"Traffic: {traffic_level}. Confidence: {confidence}."
+        )
+    else:
+        counterfactual = (
+            f"Route is near-optimal for current conditions "
+            f"(traffic: {traffic_level}). Confidence: {confidence}."
         )
 
-    print(f"[ROUTE EXPLAIN] total_cost={total_cost:.3f}")
+    return {
+        "counterfactual": counterfactual,
+        "confidence": confidence,
+        "event_log": event_log,
+        "savings_min": savings_min,
+        "total_cost": round(total_cost, 3),
+    }
 
 
 # =====================================================

@@ -1,0 +1,4 @@
+configuration,cv_mae,cv_mae_std,cv_r2
+Full system (all features),2.28,0.15,0.949
+Without weather / traffic features,6.22,0.21,0.814
+Distance-only baseline,7.41,0.33,0.748

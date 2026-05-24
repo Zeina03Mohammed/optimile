@@ -1,0 +1,1015 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage[numbers]{natbib}
+\usepackage{algorithm,algpseudocode}
+\usepackage{amsmath}
+\usepackage{caption}
+\newcommand*{\vv}[1]{\vec{\mkern0mu#1}}
+\usepackage{algorithmicx}
+\usepackage{verbatim}
+\usepackage{adjustbox}
+\usepackage{graphicx, color}
+\usepackage{epstopdf}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{array}
+\usepackage{ragged2e}
+
+\newcolumntype{H}{>{\iffalse}c<{\fi}@{}}
+\newcommand\tab[1][1cm]{\hspace*{#1}}
+\DeclareUnicodeCharacter{00A0}{~}
+\DeclareUnicodeCharacter{0301}{\'{e}}
+\DeclareUnicodeCharacter{2212}{-}
+
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+\newcommand{\mar}[1]{\textcolor{black!90!white}{#1}}
+
+\setlength{\marginparwidth}{2cm}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.07em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{
+\begin{minipage}{\textwidth}
+    \centering
+    {\LARGE\textbf{\textcolor{black}{\uppercase{Optimile: AI-Driven Last-Mile Delivery Solution}}}}
+\end{minipage}
+}
+
+\author{
+\IEEEauthorblockN{Mohmed Emad$^{1}$, Mariam Sherif$^{2}$, Zeina Mohamed$^{3}$,\\
+Maryam EssamElDin$^{4}$, Yahia Ahmed$^{5}$}
+\IEEEauthorblockA{
+mohamed2203042$^{1}$, mariam2200593$^{2}$,\\
+zeina2207267$^{3}$, maryam2204664$^{4}$, yahia2202676$^{5}$\{@miuegypt.edu.eg\}}
+}
+
+\maketitle
+
+% ─────────────────────────────────────────────────────────────
+\begin{abstract}
+We propose \textbf{Optimile}, a three-layer last-mile delivery optimization
+framework for emerging-market logistics. A \textit{Prediction Layer} (DBSCAN zone
+clustering, HistGradientBoosting travel-time estimation, and geography-aware
+synthetic augmentation) produces an ML cost matrix; an \textit{Optimization Layer}
+(Bellman-Ford business-logic sequencing, ALNS with adaptive destroy-repair
+operators over 400 iterations, and fleet stop-transfer balancing) converts it into
+optimized routes; a \textit{Context \& Adaptation Layer} (OSM Overpass + Google
+Directions API hazard detection, reactive re-optimization, and XAI audit logging)
+handles live operational disruptions. Built on 590 real GPS segments from 33
+drivers across Cairo, Alexandria, and Ismailia (2022--2025), augmented with 6,000
+geography-aware synthetic segments (6,590 total).
+On 590 real GPS segments, Random Forest achieves CV-MAE\,=\,10.5\,$\pm$\,1.0
+min and $R^2$\,=\,0.30 — a \textbf{23.5\%} reduction over the na\"{i}ve mean baseline
+(MAE 13.73 min). Physics-augmented training improves CV-MAE to 2.28 min
+($R^2$\,=\,0.95); the real-GPS figures are treated as the primary, conservative
+performance claim. Component ablation quantifies each contribution: ALNS
+delivers 34\% route cost reduction over BF-alone on synthetic instances (9.7\%
+on 82 real driver routes); the fleet stop-transfer phase reduces fleet cost by
+17\% under naive over-assignment; weather/traffic context features are the
+dominant ML contributor, raising CV-MAE by 3.94 min when removed.
+
+\textbf{Keywords:} Last-Mile Delivery, Route Optimization, Adaptive Large
+Neighborhood Search, Bellman-Ford, HistGradientBoosting, DBSCAN, Vehicle
+Routing Problem, Physics-Based Augmentation, Egyptian Logistics
+\end{abstract}
+
+% ─────────────────────────────────────────────────────────────
+\section{\textbf{\large Introduction}}
+\label{sec:intro}
+
+Last-mile delivery in Egyptian cities presents a distinct set of constraints:
+dense urban traffic, informal or imprecise address systems, mixed vehicle
+fleets (motorcycles, cars, vans), and courier companies too small to maintain
+digitized route logs at research-accessible scale. These factors compound the
+standard vehicle routing challenge and make data-driven approaches difficult
+to apply directly. A critical barrier is \textit{data scarcity}: small to
+mid-size Egyptian courier companies rarely digitize timestamped GPS route
+logs. Physics-based synthetic augmentation bridges this gap when real samples
+are insufficient~\citep{jie_hybrid_2022, kodikara_comparing_2022}; we adopt
+this approach explicitly, keeping real and synthetic evaluation separate
+throughout.
+
+Prior work has explored travel time prediction using gradient boosting and
+DBSCAN, alongside ALNS and simulated annealing for VRP, showing that weather,
+road hazards, and traffic context improve routing
+performance~\citep{mara_survey_2022, ilhan_improved_2021,
+pereira_approach_2024, liu_time-dependent_2020, moradi_prize-collecting_2025,
+he_functionality_2024, abdulrashid_explainable_2024, jie_hybrid_2022,
+gmira_managing_2021, kodikara_comparing_2022, prachitmutita_comparison_2020,
+pahwa_assessing_2023}. However, none target the Egyptian logistics context
+or address the data-scarcity/synthetic-augmentation trade-off explicitly.
+
+We present \textbf{Optimile}, a data-scarcity-aware logistics optimization framework
+whose primary contribution is not the novelty of any individual component, but
+their coordinated integration into three operational layers: a
+\textit{Prediction Layer} (DBSCAN zone clustering, HistGradientBoosting travel-time
+estimation, and geography-aware synthetic augmentation); an \textit{Optimization
+Layer} (Bellman-Ford business-logic sequencing, ALNS iterative refinement, and
+fleet stop-transfer balancing); and a \textit{Context \& Adaptation Layer}
+(dual-source hazard detection, reactive re-optimization, and XAI audit logging).
+The framework is built on 590 real GPS segments from 33 drivers across Cairo,
+Alexandria, and Ismailia (2022--2025), augmented with 6,000 geography-aware
+synthetic segments (6,590 total).
+
+Each module is lightweight and interpretable, and the framework degrades
+gracefully when contextual signals (traffic, weather, API data) are unavailable
+— a deliberate choice reflecting the realities of small Egyptian operators.
+
+\section{\textbf{\large Related Work}}
+\label{sec:related}
+
+The contributions of earlier researchers in vehicle routing, adaptive
+metaheuristics, hazard-aware routing, and machine learning-based prediction
+have shaped the development of the Optimile framework.
+
+Windras Mara et al.~\citep{mara_survey_2022} survey Adaptive Large
+Neighborhood Search across 252 applications, classifying destroy operators
+such as random, worst, and Shaw removal, and repair operators including
+greedy and k-regret insertion. They analyse adaptive weight-update mechanisms
+that control operator selection across iterations, showing that score-based
+decay strategies are most effective in VRP performance. The Optimile ALNS
+adopts this structure using multiple destroy and repair operators with
+iterative weight updates over 400 iterations.
+
+Ilhan~\citep{ilhan_improved_2021} proposes an improved simulated annealing
+approach for the capacitated vehicle routing problem, introducing a temperature
+initialization scheme and geometric cooling schedule to control probabilistic
+acceptance of worse solutions. The acceptance mechanism allows the algorithm
+to escape local optima by probabilistically accepting non-improving solutions
+based on temperature. Optimile integrates this SA criterion within its ALNS
+framework using a temperature proportional to solution cost and a gradual
+cooling factor to guide convergence over iterations.
+
+Pereira et al.~\citep{pereira_approach_2024} propose ALNS for the
+Heterogeneous Fixed Fleet Vehicle Routing Problem with Time Windows
+(HFVRPTW), focusing on optimizing fleet operations with different vehicle
+capacities under time window constraints. Results show it improves 69.6\% of
+benchmark instances with a 0.44\% average cost reduction, running $35\times$
+faster than existing approaches. Optimile extends this with a fleet-aware
+stop-transfer phase that moves stops between vehicles to reduce total
+operational cost before final per-vehicle ALNS optimization.
+
+Liu et al.~\citep{liu_time-dependent_2020} addressed the Time-Dependent VRP
+with Time Windows in city logistics by modelling road speed using discrete
+congestion levels embedded as multipliers in the routing cost function.
+Optimile adopts this idea by applying traffic multipliers
+(Low:\,$\times$0.9, Normal:\,$\times$1.0, Medium:\,$\times$1.15,
+Heavy:\,$\times$1.35, High:\,$\times$1.60, Jam:\,$\times$1.90)
+to travel-time estimates during ALNS cost evaluation.
+
+Moradi and Boroujeni~\citep{moradi_prize-collecting_2025} formulated the
+Prize-Collecting Electric VRP with Time Windows, where visiting customers
+yields negative cost components that influence optimization behavior.
+Optimile adopts this using a Bellman-Ford mechanism that handles negative
+weights, assigning urgency rewards ($-15\%$ for stops with $\leq$30 min
+time-window slack) and cluster-proximity rewards ($-10\%$ for geographically
+nearby stops) to prioritize time-sensitive deliveries.
+
+He et al.~\citep{he_functionality_2024} propose a road network assessment
+framework combining flood hazard data with network topology to evaluate road
+accessibility. Optimile assigns hazard scores to road segments using OSM
+data and weather-weighted risk evaluation to support ALNS re-routing.
+
+Abdulrashid et al.~\citep{abdulrashid_explainable_2024} presented an
+explainable AI framework for transport logistics, integrating contrastive
+and counterfactual explanations to make routing decisions interpretable.
+Optimile adopts this approach through an XAI module that generates
+plain-English counterfactuals (e.g., ``Without rerouting, this leg runs
+$+$33\% over free-flow time''), confidence badges, and causal event logs for
+each routing decision.
+
+Jie, Liu, and Sun~\citep{jie_hybrid_2022} proposed a hybrid algorithm
+incorporating weather as multiplicative factors affecting inter-stop travel
+times. Optimile adopts a similar mechanism by integrating live weather
+updates from OpenWeatherMap and applying travel-time multipliers during
+rain, storm, or fog conditions within the ALNS cost function.
+
+Gmira et al.~\citep{gmira_managing_2021} present a reactive re-optimization
+framework that triggers local re-optimization when significant travel time
+deviations occur. Optimile mirrors this by monitoring road hazards during
+execution and re-invoking ALNS from the current vehicle position when delay
+thresholds are exceeded.
+
+Kodikara et al.~\citep{kodikara_comparing_2022} investigate ensemble ML
+models for delivery time prediction under dynamic conditions, showing that
+contextual features --- trip distance, direction, weather --- significantly
+improve accuracy. This aligns with Optimile's HistGradientBoosting model for
+inter-stop travel time prediction.
+
+Prachitmutita et al.~\citep{prachitmutita_comparison_2020} investigate
+density-based clustering to improve last-mile delivery in the Capacitated
+VRP, showing that pre-routing clustering reduces planning time and total
+travel distance. Optimile uses DBSCAN to group delivery locations into zones
+used as features in the prediction model.
+
+Pahwa and Jaler~\citep{pahwa_assessing_2023} assess last-mile resilience
+under disruptions through rerouting and fleet reallocation strategies. Optimile
+adopts this by incorporating a pre-dispatch hazard detection layer that
+triggers ALNS re-optimization before execution.
+
+% ─────────────────────────────────────────────────────────────
+\mar{\section{\textbf{\large Proposed Methodology}}}
+\label{sec:methodology}
+
+\begin{figure}[H]
+\includegraphics[width=\columnwidth]{Fig/methodology.png}
+\caption{Proposed System Architecture}
+\label{fig:arch}
+\end{figure}
+
+% ── 3.1 System Architecture ──────────────────────────────────
+\mar{\subsection{System Architecture Overview}}
+
+Figure~\ref{fig:arch} shows the three-layer Optimile pipeline. An optimization
+request carries delivery stops (GPS coordinates, fragility flags, time windows),
+vehicle type, and optional context (traffic level, weather, incidents).
+
+\textbf{Layer I — Prediction}: Stop coordinates are assigned to delivery zones
+via DBSCAN; temporal (cyclic hour, day-of-week) and route-context features are
+computed per stop pair. HistGradientBoosting predicts inter-stop travel times
+for all $N \times N$ pairs, forming the ML cost matrix.
+
+\textbf{Layer II — Optimization}: Bellman-Ford computes a business-logic
+initial ordering (urgency, cluster proximity, traffic, fragility). ALNS then
+refines it over 400 iterations with adaptive destroy-repair operators and
+Metropolis acceptance. For multi-vehicle scenarios, a transfer phase
+redistributes stops from the highest-cost vehicle before per-vehicle ALNS.
+
+\textbf{Layer III — Context \& Adaptation}: OSM Overpass API and Google
+Directions API are polled mid-route. When estimated delay exceeds 1.0 minute,
+ALNS re-invokes from the vehicle's current position with updated hazard costs.
+An XAI module logs plain-English counterfactuals for each routing decision.
+
+Components communicate through a FastAPI backend exposing three endpoints:
+\texttt{/optimize} (single vehicle), \texttt{/reoptimize} (mid-route hazard
+trigger), and \texttt{/fleet-reoptimize} (multi-vehicle with stop transfer).
+
+% ── Layer I: Prediction ──────────────────────────────────────
+\mar{\subsection{Layer I: Travel-Time Prediction}}
+
+\mar{\subsubsection{Datasets \& Augmentation}}
+
+The dataset (\texttt{drivers\_movements.csv}) contains 1,005 GPS
+arrival records from 33 drivers across Cairo, Alexandria, and Ismailia
+(2022--2025). After filtering malformed timestamps, invalid coordinates, and
+gaps outside 1--90 minutes, \textbf{590 valid inter-stop segments} remain.
+
+\textbf{Augmentation Rationale.}A geography-aware synthetic generator bootstrap-resamples real
+stop-pairs with $\sigma$=0.001\textdegree{} ($\approx$111 m) perturbation,
+enriching each segment with traffic and weather context via a physics formula
+calibrated to real GPS statistics (mean 20.3 min, std 18.3 min,
+$r_{\text{dist-time}}\!=\!0.546$). This yields 6,000 synthetic segments
+preserving the real data's geographic structure, forming a \textbf{6,590-segment}
+combined corpus. All ML results are reported separately; real-GPS figures are
+the primary claim.
+
+The combined dataset (\texttt{combined\_segments.csv}) contains 6,590 segments,
+each described by 16 features covering spatial, temporal, route-context, and
+vehicle-type dimensions (Table~1). Real GPS rows lack traffic/weather labels;
+these are handled silently by \texttt{OneHotEncoder(handle\_unknown=``ignore'')}.
+
+\begin{table}[H]
+\caption{Features of Dataset 2 — Combined Training Segments
+(\texttt{combined\_segments.csv})}
+\centering
+\begin{tabular}{|l|l|p{3.8cm}|}
+\hline
+\textbf{Feature} & \textbf{Type} & \textbf{Description} \\ \hline
+distance\_km         & Numerical   & Haversine distance between stops (km) \\ \hline
+hour\_sin            & Numerical   & Sine of cyclic hour-of-day encoding \\ \hline
+hour\_cos            & Numerical   & Cosine of cyclic hour-of-day encoding \\ \hline
+dow\_sin             & Numerical   & Sine of cyclic day-of-week encoding \\ \hline
+dow\_cos             & Numerical   & Cosine of cyclic day-of-week encoding \\ \hline
+month                & Numerical   & Month of delivery (1--12) \\ \hline
+stop\_index          & Numerical   & Index of current stop in route (0-based) \\ \hline
+stops\_in\_route     & Numerical   & Total stops in the driver's route \\ \hline
+stops\_remaining     & Numerical   & Stops remaining after current stop \\ \hline
+route\_progress      & Numerical   & Ratio of completed legs (0.0--1.0) \\ \hline
+is\_same\_cluster    & Binary      & 1 if origin and destination share a zone \\ \hline
+bearing\_deg         & Numerical   & Compass direction origin$\to$destination (0--360\textdegree{}) \\ \hline
+cluster\_dest\_cat   & Categorical & DBSCAN zone ID of the destination stop \\ \hline
+vehicle\_type        & Categorical & Delivery vehicle (car / van / motorcycle) \\ \hline
+traffic\_level       & Categorical & Traffic condition (Low/Normal/Medium/High/Jam) \\ \hline
+weather              & Categorical & Weather (Sunny/Windy/Sandstorm/Rainy) \\ \hline
+time\_to\_next\_stop\_min & Numerical & \textbf{Target}: delivery leg time (min) \\ \hline
+\end{tabular}
+\end{table}
+
+% ── 3.3 Data Visualization ───────────────────────────────────
+\mar{\subsubsection{Data Visualization}}
+
+\paragraph{Real GPS segments.}
+
+The delivery leg time distribution (Figure~\ref{fig:time_dist}) is strongly
+right-skewed (skewness 1.57), with the median (14.1 min) well below the mean
+(20.3 min). This pattern reflects frequent short urban hops punctuated by
+occasional long cross-city legs, and motivates MAE — rather than RMSE — as
+the primary evaluation metric to avoid outlier dominance.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/delivery_time_dist.png}
+\caption{Delivery Time Distribution — right-skewed, mean 20.3 min, median 14.1 min}
+\label{fig:time_dist}
+\end{figure}
+
+DBSCAN ($\varepsilon\!=\!0.008$\textdegree{}$\!\approx\!0.9$ km, \texttt{min\_samples=3})
+identifies 36 delivery zones across all three cities (Figure~\ref{fig:gps_map}).
+The $\varepsilon$ value was chosen to match a typical Cairo city block
+($\approx$0.9 km), so that stops within the same block cluster together;
+\texttt{min\_samples=3} requires at least three GPS stops to form a zone,
+preventing singleton clusters from sparse peripheral areas.
+29 of these zones appear in at least one training segment as origin or
+destination and are used as the \texttt{cluster\_dest\_cat} categorical feature.
+The two geographically separated clusters — Alexandria (left) and
+Cairo/Ismailia (right) — confirm multi-city driver coverage and illustrate
+why zone-aware features improve routing beyond Haversine distance alone.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/gps_cluster_map.png}
+\caption{GPS Stop Locations Coloured by DBSCAN Delivery Zone (grey = noise)}
+\label{fig:gps_map}
+\end{figure}
+
+Figure~\ref{fig:by_hour} reveals Cairo's characteristic bimodal rush-hour
+pattern: delivery times peak during 8--11h (morning commute) and 15--19h
+(evening peak), and are shortest in pre-dawn hours. This empirical pattern
+directly informed the piecewise \texttt{hour\_factor} function (0.62--1.35)
+used to calibrate synthetic delivery times.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/time_by_hour.png}
+\caption{Mean Delivery Time by Hour — Cairo rush-hour peaks at 8--11h and 15--19h}
+\label{fig:by_hour}
+\end{figure}
+
+The scatter plot (Figure~\ref{fig:dist_time}) confirms a moderate distance--time
+relationship ($r\!=\!0.546$); the wide residual spread shows that traffic,
+weather, and route context are needed to explain the remaining variance.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/dist_vs_time.png}
+\caption{Distance vs Delivery Time ($r\!=\!0.546$, calibration target confirmed)}
+\label{fig:dist_time}
+\end{figure}
+
+\paragraph{Combined training dataset.}
+
+Figure~\ref{fig:by_traffic} shows delivery times increasing monotonically from
+Low to Jam traffic — validating the physics simulator's multiplicative traffic
+factors (Low: 1.40$\times$, Normal: 1.00$\times$, Jam: 0.40$\times$ speed,
+resulting in longer times as congestion increases). This monotonic trend is a
+necessary condition for model validity.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/time_by_traffic.png}
+\caption{Delivery Time by Traffic Level — monotonic increase validates simulator multipliers}
+\label{fig:by_traffic}
+\end{figure}
+
+Weather condition effects follow the expected ordering: Sandstorm produces the
+longest delivery times (0.75$\times$ factor) and Sunny conditions the shortest
+(1.00$\times$), validating the simulator's weather multipliers alongside the
+traffic figure.
+
+\textbf{Synthetic generation} bootstrap-resamples real stop-pairs with
+$\sigma$=0.001\textdegree{} coordinate perturbation, preserving the real
+distance distribution. Traffic and weather — absent from GPS records — are
+sampled from operational priors and used in a calibrated physics formula:
+\[
+  t = \frac{d}{v_{\text{base}} \times f_{\text{traffic}} \times
+  f_{\text{hour}} \times f_{\text{weather}}} \times 60 + \varepsilon
+\]
+where $v_{\text{base}} \in \{5.8, 8.0, 11.0\}$ km/h (van/car/motorcycle;
+effective GPS speed 4.66 km/h including parking and handoff), $f_{\text{traffic}}
+\in \{0.40\text{--}1.40\}$, $f_{\text{weather}} \in \{0.75\text{--}1.00\}$,
+and $\varepsilon \sim \text{LogNormal}(0, 0.5) - 1$ is right-skewed noise
+matching the real GPS shape. Both datasets use 5-fold CV throughout.
+
+\begin{table}[H]
+\centering
+\caption{Calibration Check — Synthetic vs Real GPS Statistics}
+\label{tab:calibration}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Statistic} & \textbf{Real GPS} & \textbf{Synthetic} \\ \hline
+Time mean (min)       & 20.3 & 22.2 \\ \hline
+Time std (min)        & 18.3 & 23.3 \\ \hline
+Distance mean (km)    & 1.578 & 1.586 \\ \hline
+Distance std (km)     & 2.138 & 2.000 \\ \hline
+Dist--time corr ($r$) & 0.546 & 0.827 \\ \hline
+\end{tabular}
+\end{table}
+
+Synthetic distance statistics match real GPS within 0.5\% (Table~\ref{tab:calibration}),
+confirming geographic structure is preserved. The higher dist--time correlation
+in synthetic data reflects the deterministic formula; real GPS shows additional
+variance from unobserved factors.
+
+% ── 3.5 Travel Time Prediction Models ────────────────────────
+\mar{\subsubsection{Prediction Models}}
+
+Four models were trained and compared using 5-fold CV-MAE, all sharing a
+\texttt{StandardScaler} + \texttt{OneHotEncoder(handle\_unknown=``ignore'')}
+pipeline. \textbf{ElasticNet} (\texttt{alpha=1.0}, \texttt{l1\_ratio=0.5})
+serves as the regularised linear baseline. \textbf{Random Forest}
+(\texttt{n\_estimators=300}, \texttt{max\_depth=12}) via bootstrap aggregation
+achieves the best real-GPS generalisation (CV-MAE 10.50 min, $R^2$=0.30).
+\textbf{Gradient Boosting} (\texttt{n\_estimators=300}, \texttt{lr=0.05},
+\texttt{subsample=0.8}) achieves combined-dataset CV-MAE 2.36 min ($R^2$=0.948).
+\textbf{HistGradientBoosting} (\texttt{max\_iter=300},
+\texttt{max\_depth=6}, \texttt{lr=0.05}) is \textbf{selected as the
+production model}: CV-MAE 2.28 min ($R^2$=0.949), with native missing-value
+handling (critical for real GPS rows lacking traffic/weather
+labels) and faster $N\!\times\!N$ inference.
+
+% ── Layer II: Optimization ───────────────────────────────────
+\mar{\subsection{Layer II: Route Optimization}}
+
+This layer converts the ML cost matrix into an optimized stop sequence and,
+for multi-vehicle fleets, a load-balanced route assignment. The two components
+have \textit{different roles}: Bellman-Ford is a constraint-aware initializer
+that encodes urgency, fragility, and proximity rules into the starting visit
+order (using negative-weight edges that Dijkstra cannot handle); ALNS then
+minimizes route cost from that structured starting point.
+
+\mar{\subsubsection{Stop Sequencing: Bellman-Ford}}
+\label{sec:bf}
+
+Bellman-Ford computes the initial stop visit order by encoding business-logic
+priority rules as edge weights. Crucially, some rules produce \textit{negative}
+weights (urgency rewards, cluster proximity discounts) — making Dijkstra
+inapplicable and requiring Bellman-Ford's full relaxation passes. The goal is
+\textit{not} route-cost minimization; it is producing a visit order that respects
+urgency deadlines and fragility priorities \textit{before} ALNS begins. The weight
+$w(i,j)$ between stops $i$ and $j$ is:
+\[
+  w(i,j) = t_{\text{base}}(i,j) \cdot
+  \bigl(1 + \delta_{\text{frag}} + \delta_{\text{traffic}}
+  + \delta_{\text{weather}} - \delta_{\text{urgent}}
+  - \delta_{\text{cluster}}\bigr)
+\]
+where $t_{\text{base}}$ is the Haversine-derived travel time when Google
+Distance Matrix API data is unavailable, and the modifiers are listed in
+Table~\ref{tab:bf_modifiers}. Haversine underestimates road distance in dense
+urban grids (straight-line vs.\ actual road path); the Google Distance Matrix
+API provides actual road-network travel times when called, and takes precedence.
+The algorithm performs $n-1$ relaxation passes
+($O(V \cdot E)$) plus one negative-cycle detection pass; detected cycles
+fall back to ALNS-only ordering.
+
+\begin{table}[H]
+\centering
+\caption{Bellman-Ford Edge Weight Modifiers}
+\label{tab:bf_modifiers}
+\begin{tabular}{|l|l|p{2.5cm}|}
+\hline
+\textbf{Modifier} & \textbf{Condition} & \textbf{$\delta$} \\ \hline
+$\delta_{\text{frag}}$    & Fragile destination             & $+0.20$ \\ \hline
+$\delta_{\text{traffic}}$ & Low traffic                     & $-0.05$ \\ \hline
+$\delta_{\text{traffic}}$ & Normal traffic                  & $0$     \\ \hline
+$\delta_{\text{traffic}}$ & Medium traffic                  & $+0.10$ \\ \hline
+$\delta_{\text{traffic}}$ & Heavy traffic                   & $+0.25$ \\ \hline
+$\delta_{\text{traffic}}$ & High traffic                    & $+0.40$ \\ \hline
+$\delta_{\text{traffic}}$ & Traffic jam                     & $+0.65$ \\ \hline
+$\delta_{\text{weather}}$ & Rain / Storm / Fog              & $+0.15$ \\ \hline
+$\delta_{\text{urgent}}$  & $\leq$30 min time-window slack  & $-0.15 \times u_f$ \\ \hline
+$\delta_{\text{cluster}}$ & Travel time $<$120\,s           & $-0.10$ \\ \hline
+\end{tabular}
+\end{table}
+
+\mar{\subsubsection{Route Optimization: Adaptive Large Neighborhood Search}}
+\label{sec:alns}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/alns_flow.png}
+\caption{ALNS Destroy-Repair Cycle — operator selection, Metropolis acceptance,
+and adaptive weight update repeated over 400 iterations.}
+\label{fig:alns_flow}
+\end{figure}
+
+The ALNS framework iteratively improves delivery routes through destroy-repair
+cycles guided by an adaptive operator weight mechanism and a Metropolis
+acceptance criterion (Figure~\ref{fig:alns_flow} and Algorithm~1). Operator
+weights are initialized to 1.0 and updated after every iteration via
+score-based exponential decay.
+
+\textbf{Destroy Operators:}
+\begin{itemize}
+\item \textit{Random Removal}: Selects $k\!=\!2$ stops uniformly at random
+  and removes them from the current route.
+\item \textit{Worst Removal}: Identifies and removes the single stop
+  contributing the highest marginal cost to the route.
+\item \textit{Fragile-Targeting Removal}: Preferentially targets
+  fragile-flagged stops, allowing re-insertion ahead of tighter time windows.
+\end{itemize}
+
+\textbf{Repair Operators:}
+\begin{itemize}
+\item \textit{Greedy Insertion}: Reinserts each removed stop at the position
+  yielding the minimum incremental route cost.
+\item \textit{Regret Insertion}: Prioritizes stops with the highest regret
+  value — the cost difference between the best and second-best insertion
+  positions — to avoid suboptimal early placements.
+\end{itemize}
+
+\textbf{Acceptance \& Cooling}: A new solution is accepted if it improves the
+current best, or with Metropolis probability $P = e^{-\Delta / T}$, where
+$\Delta$ is the cost degradation. Initial temperature:
+$T_0 = 0.15 \times C_{\text{init}}$. Cooling schedule:
+$T \leftarrow 0.995 \times T$ per iteration, converging over 400 iterations.
+
+\textbf{Adaptive Operator Selection}: Each destroy-repair pair maintains a
+weight updated as:
+\[
+  w_{\text{op}} \leftarrow \max\!\left(0.1,\;
+  0.8 \cdot w_{\text{op}} + 0.2 \cdot s_{\text{op}}\right)
+\]
+where $s_{\text{op}} = 5$ for improving solutions, $s_{\text{op}} = 1$ for
+accepted non-improving solutions (Metropolis), and $s_{\text{op}} = 0$ for
+rejections. Operators are selected via roulette-wheel proportional to their weights.
+
+\textbf{Cost Function}: Total route cost integrates ML-predicted travel times,
+traffic and weather multipliers, time-window penalties (wait cost
+$0.2 \times t_{\text{wait}}$; late penalty $6.0 \times t_{\text{late}}$),
+and fragile surcharge ($2.0 \times t_{\text{travel}}$).
+
+\textbf{Fleet Optimization}: For multi-vehicle scenarios, a transfer phase
+moves stops from the highest-cost vehicle to cheaper alternatives before
+per-vehicle ALNS, minimizing total fleet ETA.
+
+\begin{algorithm}[H]
+\caption{ALNS Route Optimization}
+\begin{algorithmic}[1]
+\Require stops $S$, vehicle $v$, context $\mathcal{C}$, iters $= 400$
+\Ensure optimized route $r^*$
+\State $r \leftarrow \text{BellmanFord}(S, \mathcal{C})$;\quad $r^* \leftarrow r$
+\State $T \leftarrow 0.15 \times \text{cost}(r)$
+\State Initialize operator weights $w_d, w_p \leftarrow 1.0$ for all operators
+\For{$i = 1$ \textbf{to} iters}
+    \State $d, p \leftarrow \text{RouletteSelect}(w_d, w_p)$
+    \State $r' \leftarrow \text{Repair}_p\!\left(\text{Destroy}_d(r,\, k{=}2)\right)$
+    \State $\Delta \leftarrow \text{cost}(r') - \text{cost}(r)$
+    \If{$\Delta < 0$ \textbf{or} $\text{Uniform}(0,1) < e^{-\Delta / T}$}
+        \State $r \leftarrow r'$
+        \If{$\text{cost}(r') < \text{cost}(r^*)$}
+            \State $r^* \leftarrow r'$
+        \EndIf
+    \EndIf
+    \State $\text{UpdateWeights}(w_d, w_p, \Delta)$
+    \State $T \leftarrow 0.995 \times T$
+\EndFor
+\State \Return $r^*$
+\end{algorithmic}
+\end{algorithm}
+
+% ── Layer III: Context & Adaptation ─────────────────────────
+\mar{\subsection{Layer III: Context \& Adaptation}}
+
+\mar{\subsubsection{Road Hazard Detection}}
+\label{sec:hazard}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/rerouting_xai.png}
+\caption{Live Hazard Detection, Rerouting, and XAI Audit Pipeline —
+dual-source hazard inputs, delay threshold trigger, ALNS re-invocation,
+and structured XAI record generation.}
+\label{fig:rerouting_xai}
+\end{figure}
+
+Road hazard detection combines two complementary data sources to compensate
+for sparse OSM coverage in Egyptian urban environments.
+
+\textbf{OSM Overpass API}: A bounding-box query is issued for each
+optimization request. Road segments are classified into hazard types with
+severity scores as shown in Table~\ref{tab:hazard}.
+
+\begin{table}[H]
+\centering
+\caption{OSM Hazard Classification and Severity Scores}
+\label{tab:hazard}
+\begin{tabular}{|l|l|c|}
+\hline
+\textbf{OSM Tag} & \textbf{Hazard Type} & \textbf{Severity} \\ \hline
+\texttt{flood\_prone=yes}                    & road\_closed  & 0.85 \\ \hline
+\texttt{highway=ford} / \texttt{ford=yes}   & road\_closed  & 0.90 \\ \hline
+\texttt{surface=mud}                         & road\_closed  & 0.85 \\ \hline
+\texttt{surface=sand}                        & traffic\_jam  & 0.70 \\ \hline
+\texttt{surface=dirt} / \texttt{ground}     & traffic\_jam  & 0.55 \\ \hline
+\texttt{surface=gravel}                      & traffic\_jam  & 0.45 \\ \hline
+\texttt{surface=unpaved}                     & traffic\_jam  & 0.55 \\ \hline
+\texttt{surface=grass}                       & traffic\_jam  & 0.50 \\ \hline
+\texttt{tunnel=yes}                          & traffic\_jam  & 0.50 \\ \hline
+\end{tabular}
+\end{table}
+
+\textbf{Google Directions API}: An $N \times N$ pairwise duration matrix is
+fetched in batches of 25 origins (Google API limit). Responses use
+\texttt{duration\_in\_traffic} when available, falling back to
+\texttt{duration}. Responses are cached in 5-minute buckets to minimize API
+calls across closely spaced requests.
+
+\textbf{Integration into ALNS}: Detected OSM hazards are merged with any
+user-reported incidents. The most severe incident type is injected into the
+ALNS cost function with the following delay penalties:
+\begin{itemize}
+\item \textit{road\_closed}: $+200$ minutes (near-infinite barrier)
+\item \textit{accident}: $+60 \times \text{severity}$ minutes
+\item \textit{traffic\_jam}: $+35 \times \text{severity}$ minutes
+\end{itemize}
+
+\textbf{Re-Optimization Trigger}: If the estimated delay $\geq 1.0$ minute,
+ALNS is re-invoked from the vehicle's current GPS position over 300
+iterations, with Bellman-Ford providing a refreshed initial ordering under
+the updated hazard context.
+
+\textbf{XAI Audit Module}: Every routing decision produces a structured record
+with four fields: \textit{counterfactual} (plain-English explanation, e.g.,
+``Without rerouting, leg 7$\to$8 runs $+$33\% over free-flow time'');
+\textit{confidence} (\textit{HIGH} if incident delay $\geq$50 min or savings
+$\geq$15 min, \textit{MEDIUM} if $\geq$15 min or savings $\geq$5 min,
+\textit{LOW} otherwise); \textit{event\_log} (per-leg penalty breakdown); and
+\textit{savings\_min} (minutes saved vs.\ a reverse-order counterfactual).
+Confidence thresholds were calibrated on the 82 real driver routes and align
+with the route-size patterns in Table~\ref{tab:ablation_real}.
+
+\mar{\subsection{Performance Metrics}}
+
+Prediction is evaluated using MAE (primary), RMSE, and $R^2$; MAE is chosen
+because the right-skewed delivery time distribution (skewness 1.57) makes it
+more robust to outliers. Route quality is measured by total route cost and
+percentage improvement over baselines. Real GPS and combined datasets are
+evaluated in separate CV runs to prevent leakage from physics-calibrated labels.
+
+% ─────────────────────────────────────────────────────────────
+\mar{\section{\textbf{\large Results and Analysis}}}
+\label{sec:results}
+
+Results are reported separately for 590 real GPS segments and the 6,590-segment
+combined dataset.
+
+\subsection{Real GPS Dataset}
+
+\begin{table}[H]
+\centering
+\caption{CV Results — Real GPS Segments (590 segments, 5-fold)}
+\label{tab:real_cv}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Model} & \textbf{CV-MAE (min)} & \textbf{CV-RMSE (min)} & \textbf{CV-$R^2$} \\ \hline
+ElasticNet                             & 11.31 & 15.38 & 0.2615 \\ \hline
+\textbf{Random Forest}                 & \textbf{10.50} & \textbf{14.85} & \textbf{0.3031} \\ \hline
+Gradient Boosting                      & 11.10 & 15.67 & 0.2326 \\ \hline
+HistGradientBoosting                   & 11.26 & 15.94 & 0.2019 \\ \hline
+\end{tabular}
+}
+\end{table}
+
+Random Forest achieves CV-MAE 10.50\,$\pm$\,1.0 min and $R^2$\,=\,0.30. The
+operational baseline (predict mean) gives MAE 13.73 min; Random Forest's
+10.50 min is a \textbf{23.5\% reduction}, providing better ALNS cost-matrix
+inputs than a Haversine estimate. ElasticNet's linear structure misses rush-hour
+and zone effects, giving the weakest $R^2$ (Figure~\ref{fig:mae_real}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/model_mae_real.png}
+\caption{CV-MAE and CV-RMSE Across Models — Real GPS Segments}
+\label{fig:mae_real}
+\end{figure}
+
+\subsection{Combined Training Dataset}
+
+\begin{table}[H]
+\centering
+\caption{CV Results — Combined Dataset (6,590 segments, 5-fold)}
+\label{tab:comb_cv}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Model} & \textbf{CV-MAE (min)} & \textbf{CV-RMSE (min)} & \textbf{CV-$R^2$} \\ \hline
+ElasticNet                             & 10.28 & 14.31 & 0.6084 \\ \hline
+Random Forest                          & 3.29  &  6.27 & 0.9243 \\ \hline
+Gradient Boosting                      & 2.36  &  5.20 & 0.9477 \\ \hline
+\textbf{HistGradientBoosting}          & \textbf{2.28} & \textbf{5.15} & \textbf{0.9486} \\ \hline
+\end{tabular}
+}
+\end{table}
+
+HistGradientBoosting achieves the best combined-dataset CV-MAE (2.28 min,
+$R^2$\,=\,0.95), narrowly edging Gradient Boosting (2.36 min, $R^2$\,=\,0.948).
+Both tree-boosting models far outperform ElasticNet ($R^2$\,=\,0.61).
+\textbf{HistGradientBoosting} is selected as the production model: it
+achieves the lowest MAE while providing faster route-matrix inference and
+native missing-value handling for real GPS rows lacking traffic/weather labels.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/model_r2.png}
+\caption{$R^2$ Score Comparison Across Models and Datasets}
+\label{fig:r2}
+\end{figure}
+
+Figure~\ref{fig:r2} shows tree-model $R^2$ rising from 0.20--0.30 (real GPS)
+to 0.92--0.95 (combined), confirming that physics augmentation transfers
+delivery time relationships into the training signal.
+Figure~\ref{fig:actual_vs_pred} shows good fit for short legs ($<$30 min);
+the spread at longer legs reflects unobserved variance (driver behaviour,
+unlogged traffic), consistent with real-GPS $R^2$\,=\,0.30.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/actual_vs_predicted_real.png}
+\caption{Actual vs Predicted Delivery Time — HistGBM, real GPS hold-out (20\%).
+Dashed line = perfect prediction.}
+\label{fig:actual_vs_pred}
+\end{figure}
+
+\subsection{Interpretation and Deployment Trajectory}
+
+The combined $R^2$\,=\,0.95 must be read carefully: 91\% of the corpus is
+physics-generated, so the model partly recovers simulator multipliers.
+\textbf{Real-GPS figures ($R^2$\,=\,0.30, CV-MAE 10.5 min) are the primary
+claim.} The combined model is used in ALNS for its better-calibrated relative
+costs under traffic and weather variation.
+
+Table~\ref{tab:learning_curve} quantifies the role of synthetic augmentation:
+real GPS alone yields $R^2$\,=\,0.20, rising to 0.95 at 6,590 total. The
+fivefold improvement cannot be achieved by collecting more real GPS records
+alone. Post-deployment GPS accumulation will enable physics re-calibration
+and further improvement.
+
+\begin{table}[H]
+\centering
+\caption{Augmentation Trajectory — Synthetic Volume vs Model Quality
+(590 real records fixed; HistGBM, 5-fold CV).
+Generated by \texttt{scripts/ablation\_synthetic\_volume.py}.}
+\label{tab:learning_curve}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Synthetic added} & \textbf{Total} & \textbf{CV-MAE (min)} & \textbf{CV-$R^2$} \\ \hline
+0 (real only)   &   590 & 11.26 & 0.202 \\ \hline
+500             & 1,090 &  8.25 & 0.603 \\ \hline
+1,000           & 1,590 &  6.24 & 0.740 \\ \hline
+2,000           & 2,590 &  4.35 & 0.852 \\ \hline
+3,000           & 3,590 &  3.36 & 0.900 \\ \hline
+4,500           & 5,090 &  2.68 & 0.931 \\ \hline
+6,000 (current) & 6,590 &  2.27 & 0.948 \\ \hline
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:aug_traj} shows the same trajectory: monotonic improvement
+saturating near 6,000 synthetic records.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\columnwidth]{Fig/augmentation_trajectory.png}
+\caption{Augmentation Trajectory — CV-MAE (left axis) and CV-$R^2$ (right axis)
+as synthetic volume grows from 0 to 6,000 records (590 real GPS fixed).}
+\label{fig:aug_traj}
+\end{figure}
+
+% ── 4.4 Component Ablation ───────────────────────────────────
+\subsection{Component Ablation Study}
+
+All ablation experiments use fixed random seed 42.
+
+\subsubsection{ML Feature Ablation}
+
+Three configurations evaluated with HistGradientBoosting, 5-fold CV
+(Table~\ref{tab:ablation_ml}).
+
+\begin{table}[H]
+\centering
+\caption{ML Feature Ablation — HistGradientBoosting, 5-fold CV,
+Combined Dataset (6,590 segments)}
+\label{tab:ablation_ml}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration} & \textbf{CV-MAE (min)} & \textbf{$\pm$ std} & \textbf{CV-$R^2$} \\ \hline
+Full system (all features)         & 2.28  & 0.15 & 0.949 \\ \hline
+Without weather / traffic features & 6.22  & 0.21 & 0.814 \\ \hline
+Distance-only baseline             & 7.41  & 0.33 & 0.748 \\ \hline
+\end{tabular}
+}
+\end{table}
+
+Weather/traffic context features are the dominant contributor: removal raises
+CV-MAE by 3.94 min (from 2.28 to 6.22 min) and drops $R^2$ from 0.949 to 0.814.
+Distance-only degrades MAE to 7.41 min ($R^2$\,=\,0.748), confirming substantial
+ML signal beyond Haversine-only heuristics. DBSCAN zone features are excluded as their impact is largely captured by
+\texttt{distance\_km} and \texttt{bearing\_deg}. Note: 91\% physics-generated
+data means removing weather/traffic disproportionately hurts synthetic rows;
+read alongside real-GPS results (Table~\ref{tab:real_cv}).
+
+\subsubsection{ALNS vs. Bellman-Ford Initialisation Alone}
+
+Table~\ref{tab:ablation_alns} compares greedy nearest-neighbor (NN), BF-only,
+and BF\,+\,400 ALNS iterations across 30 instances at four stop-count levels.
+
+\begin{table}[H]
+\centering
+\caption{NN-only vs.\ BF-only vs.\ BF\,+\,ALNS — Mean Route Cost (30 instances
+per stop count, 400 ALNS iterations, \texttt{random\_state=42}).
+NN-only column from \texttt{ablation\_alns.py}; BF-only and BF\,+\,ALNS columns
+from \texttt{ablation\_bf\_vs\_alns.py}.}
+\label{tab:ablation_alns}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{Stops} & \textbf{NN-only (km)} & \textbf{BF-only (km)} & \textbf{BF\,+\,ALNS (km)} & \textbf{Saved vs NN} & \textbf{Saved vs BF} \\ \hline
+5  & 3.238 & 3.533 &  3.054 & 5.7\%  & 13.6\% \\ \hline
+10 & 5.498 & 6.870 &  4.898 & 10.9\% & 28.7\% \\ \hline
+15 & 7.552 & 11.531 & 6.628 & 12.2\% & 42.5\% \\ \hline
+20 & 8.690 & 16.091 & 7.880 &  9.3\% & 51.0\% \\ \hline
+\multicolumn{4}{|l|}{Mean savings} & \textbf{9.5\%} & \textbf{34.0\%} \\ \hline
+\end{tabular}
+}
+\end{table}
+
+BF\,+\,ALNS outperforms greedy nearest-neighbor dispatch by a mean \textbf{9.5\%}
+and BF-alone by a mean \textbf{34.0\%}. The 34\% improvement reflects ALNS's
+iterative refinement over 400 destroy-repair cycles, scaling monotonically with
+route size. Note that BF-alone records higher cost than NN on instances without
+active urgency windows: BF's edge weights are calibrated for business-logic
+constraint encoding (urgency, fragile, cluster proximity) rather than
+route-cost minimization; ALNS then converts the structured BF ordering into a
+cost-optimal sequence. A secondary experiment confirmed that replacing BF initialisation with a
+sequential order changes final ALNS cost by only 1.6\%, confirming ALNS
+converges robustly from any starting point. BF's contribution is
+\textit{structural}: high-urgency stops with $\leq$30 min time-window slack are
+visited first and fragile items receive priority reinsertion from iteration~1 —
+constraint ordering that ALNS inherits rather than having to discover.
+
+\textbf{Validation on 82 real driver routes} (Cairo, Alexandria, Ismailia;
+$\geq$4 stops, sorted by arrival timestamp) confirmed the same pattern on real
+GPS coordinates (Table~\ref{tab:ablation_real}).
+
+\begin{table}[H]
+\centering
+\caption{BF-Only vs. BF\,+\,ALNS on 82 Real Driver Routes (all three cities)}
+\label{tab:ablation_real}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Route size} & \textbf{Routes} & \textbf{Mean improvement} \\ \hline
+4--6 stops   & 19 &  0.9\% \\ \hline
+7--10 stops  & 22 &  4.1\% \\ \hline
+11--15 stops & 25 & 13.8\% \\ \hline
+16+ stops    & 16 & 21.3\% \\ \hline
+\multicolumn{2}{|l|}{Overall (mean / median)} & \textbf{9.7\% / 4.7\%} \\ \hline
+\end{tabular}
+\end{table}
+
+ALNS gain is minimal for short routes ($<$5\% at 4--10 stops), growing to
+21.3\% for 16+ stops. The lower overall mean (9.7\% vs 34\% synthetic) is
+expected — real routes skew shorter (median 8 stops).
+
+% ── 4.5 Fleet Transfer Evaluation ────────────────────────────
+\subsection{Fleet Stop-Transfer Evaluation}
+
+Table~\ref{tab:ablation_fleet} compares fleet cost with and without the
+transfer phase on 30 2-vehicle instances at three imbalance levels (one vehicle
+assigned 70--80\% of stops; 300 ALNS iterations).
+
+\begin{table}[H]
+\centering
+\caption{Fleet Transfer Phase — Total Cost With vs Without Rebalancing}
+\label{tab:ablation_fleet}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Total stops} & \textbf{Imbalance} & \textbf{No transfer} & \textbf{Improvement} \\ \hline
+10 & 70/30 &  6.642 & 22.6\% \\ \hline
+16 & 75/25 &  8.615 & 14.2\% \\ \hline
+20 & 80/20 & 10.092 & 14.1\% \\ \hline
+\multicolumn{3}{|l|}{Mean improvement} & \textbf{17.0\%} \\ \hline
+\end{tabular}
+\end{table}
+
+Transfer reduces fleet cost by a mean 17.0\%. Figure~\ref{fig:fleet_chart}
+shows the cost difference at each imbalance level; the largest gain (22.6\%)
+occurs when rebalancing lets both vehicles serve nearby clusters.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\columnwidth]{Fig/fleet_transfer_chart.png}
+\caption{Fleet Stop-Transfer — Route Cost With vs Without Rebalancing.
+Orange percentages indicate savings; 30 instances per configuration.}
+\label{fig:fleet_chart}
+\end{figure}
+
+% ── 4.6 System Behavior Illustration ─────────────────────────
+\subsection{Illustrative System Behavior}
+
+Figure~\ref{fig:route_comparison} shows a representative 12-stop Cairo route
+(real GPS coordinates, driver 64) comparing the unoptimized GPS arrival sequence
+against the ALNS-optimized sequence. The optimized order eliminates two
+significant cross-city backtracking segments, reducing total route distance by
+9.2\% — consistent with the 9.7\% mean improvement measured across 82 real
+driver routes in Table~\ref{tab:ablation_real}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/route_comparison.png}
+\caption{Before/After Route Optimization — 12-stop real Cairo route.
+Left: unoptimized GPS arrival sequence (12.2\,km).
+Right: ALNS-optimized sequence (11.1\,km, $-9.2\%$).
+Stop numbers indicate visit order; green = start, orange = final stop.}
+\label{fig:route_comparison}
+\end{figure}
+
+Figure~\ref{fig:rerouting_scenario} shows the full rerouting sequence. An OSM
+query returns \texttt{surface=sand} (severity 0.70, classified
+\textit{traffic\_jam}), injecting $+24.5$ min ($35\!\times\!0.70$). The delay
+exceeds the 1.0 min threshold; ALNS re-invokes over 300 iterations, producing
+a rerouted path that avoids the blocked segment. The XAI module outputs:
+\textit{counterfactual} ``Without rerouting, leg 7$\to$8 runs $+$33\% over
+free-flow time (24.5 min delay). Rerouting saves $\approx$19 min. Confidence:
+HIGH''; \textit{event\_log}: base travel 12.1 min + incident penalty 24.5 min;
+\textit{savings\_min}: 19.0 min.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/rerouting_scenario.png}
+\caption{Live Rerouting on a 12-stop Cairo Route.
+(a) Optimized pre-dispatch route; (b) OSM hazard detected — \texttt{surface=sand},
+$+$24.5 min injected, ALNS re-invoked; (c) Rerouted path, saving $\approx$19 min.}
+\label{fig:rerouting_scenario}
+\end{figure}
+
+% ── Operational Impact Summary ────────────────────────────────
+\subsection{Operational Impact Summary}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{Fig/operational_impact.png}
+\caption{Operational Impact Summary — six key metrics across prediction,
+route optimization, fleet balancing, and hazard rerouting.}
+\label{fig:op_impact}
+\end{figure}
+
+% ── Limitations ───────────────────────────────────────────────
+\subsection{Limitations}
+
+Four boundaries should be noted. \textbf{(1) Haversine fallback}: without
+Google Distance Matrix API, BF and ALNS use Haversine distance, which
+underestimates actual road distance in dense urban grids.
+\textbf{(2) No live deployment}: all results are from offline replay and
+synthetic simulation — no live dispatch trial, driver study, or SLA
+measurement has been conducted; this is the primary gap for future validation.
+\textbf{(3) Synthetic data dominance}: the combined $R^2$\,=\,0.95 reflects
+a 91\% physics-generated corpus; the model partly recovers simulator
+multipliers. Real-GPS $R^2$\,=\,0.30 is the primary external validity claim.
+\textbf{(4) No established-solver baseline}: ablation compares against greedy
+nearest-neighbor and BF-only, not against OR-Tools or LKH-3.
+
+% ─────────────────────────────────────────────────────────────
+\mar{\section{\textbf{\large Conclusion}}}
+\label{sec:conclusion}
+
+Optimile demonstrates measurable delivery improvements under the data-scarcity
+conditions typical of emerging-market logistics. On 590 real GPS segments,
+Random Forest achieves a 23.5\% reduction over the na\"{i}ve mean baseline
+(CV-MAE 10.5 min, $R^2$\,=\,0.30). Physics-augmented training ($R^2$\,=\,0.95)
+improves ALNS cost-matrix inputs; that metric reflects simulator structure and
+is interpreted accordingly.
+
+Component ablation quantifies each contribution: ALNS delivers 34\% route
+cost reduction over BF-alone (synthetic), validated at 9.7\% mean on 82 real
+driver routes (21.3\% for 16+ stops); fleet stop-transfer reduces fleet cost
+by 17\% under naive over-assignment; removing weather/traffic context raises
+CV-MAE by 3.94 min, confirming they are the dominant ML contributor.
+Real GPS alone yields $R^2$\,=\,0.20; the fivefold improvement to 0.95
+requires synthetic augmentation (Table~\ref{tab:learning_curve}). Post-deployment
+GPS accumulation will enable physics re-calibration as the corpus grows.
+
+Future work will pursue three directions: (1) a live dispatch trial with
+partner couriers, collecting SLA improvement, fuel savings, and driver
+feedback to validate the framework against real operational targets; (2) online
+retraining as field GPS records accumulate, progressively tightening the
+physics calibration; and (3) a dispatcher UI with before/after route maps,
+vehicle-balancing visuals, and rerouting overlays, since visual operational
+evidence is essential for logistics practitioner adoption.
+
+% ─────────────────────────────────────────────────────────────
+\bibliographystyle{IEEEtranN}
+\bibliography{references}
+
+\end{document}

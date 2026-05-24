@@ -1,10 +1,10 @@
 {
   "model_name": "HistGradientBoosting",
-  "holdout_mae": 3.748,
-  "holdout_rmse": 6.053,
-  "holdout_r2": 0.8294,
-  "cv_mae_mean": 3.643,
-  "cv_mae_std": 0.152,
+  "holdout_mae": 2.425,
+  "holdout_rmse": 5.364,
+  "holdout_r2": 0.9416,
+  "cv_mae_mean": 2.276,
+  "cv_mae_std": 0.147,
   "n_segments": 6590,
   "n_folds": 5,
   "feature_names": [

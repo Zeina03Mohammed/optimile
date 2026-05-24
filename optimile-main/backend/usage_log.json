@@ -436,5 +436,47 @@
     "endpoint": "/api/v1/driver/31/status",
     "timestamp": "2026-05-21T11:08:46.696552",
     "response_ms": 2.0
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-05-23T20:18:20.531774",
+    "response_ms": 0.8
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/driver/31/status",
+    "timestamp": "2026-05-23T20:18:20.549845",
+    "response_ms": 0.3
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-05-23T20:19:25.210978",
+    "response_ms": 1.8
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/driver/31/status",
+    "timestamp": "2026-05-23T20:19:25.224064",
+    "response_ms": 1.1
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/drivers",
+    "timestamp": "2026-05-23T20:55:29.428859",
+    "response_ms": 3.6
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/orders",
+    "timestamp": "2026-05-23T20:55:29.436795",
+    "response_ms": 0.5
+  },
+  {
+    "key": "opt-demo-key-001",
+    "endpoint": "/api/v1/driver/28/status",
+    "timestamp": "2026-05-23T20:55:29.440343",
+    "response_ms": 0.2
   }
 ]
