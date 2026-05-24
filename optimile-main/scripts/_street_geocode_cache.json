@@ -1,0 +1,392 @@
+{
+  "Talaat Harb Street": {
+    "lat": 30.0489904,
+    "lng": 31.239459,
+    "fmt": "Talaat Harb, Cairo Governorate, Egypt"
+  },
+  "Qasr El Nil Street": {
+    "lat": 30.0482262,
+    "lng": 31.2403814,
+    "fmt": "Kasr Al Nile, Cairo Governorate, Egypt"
+  },
+  "Champollion Street": {
+    "lat": 30.0501826,
+    "lng": 31.2379377,
+    "fmt": "Champollion Rd, Cairo Governorate, Egypt"
+  },
+  "Mohamed Mahmoud Street": {
+    "lat": 30.0430587,
+    "lng": 31.239915,
+    "fmt": "Mohammed Mahmoud, Cairo Governorate, Egypt"
+  },
+  "Sherif Basha Street": {
+    "lat": 30.0488698,
+    "lng": 31.2423586,
+    "fmt": "Sherif Basha, Cairo Governorate, Egypt"
+  },
+  "Abdel Khalek Tharwat Street": {
+    "lat": 30.0219514,
+    "lng": 31.2250106,
+    "fmt": "Mohammed Tharwat, Al Manyal Al Gharbi, Old Cairo, Cairo Governorate 4240229, Egypt"
+  },
+  "Adly Street": {
+    "lat": 30.0511637,
+    "lng": 31.2438492,
+    "fmt": "Adly, Cairo Governorate, Egypt"
+  },
+  "Emad El Din Street": {
+    "lat": 30.055927,
+    "lng": 31.2442982,
+    "fmt": "Emad El-Deen, Al Azbakeya, Cairo Governorate, Egypt"
+  },
+  "26th of July Street": {
+    "lat": 30.0525881,
+    "lng": 31.2423088,
+    "fmt": "26 يوليو، Cairo Governorate, Egypt"
+  },
+  "Bab El Louk Square": {
+    "lat": 30.0416135,
+    "lng": 31.2394683,
+    "fmt": "Bab El Luk, El-Shaikh Abd Allah, Abdeen, Cairo Governorate 4280003, Egypt"
+  },
+  "Road 9 Maadi": {
+    "lat": 29.9592622,
+    "lng": 31.2590684,
+    "fmt": "Rd 9, Cairo Governorate, Egypt"
+  },
+  "Road 200 Maadi": {
+    "lat": 29.9540731,
+    "lng": 31.2734276,
+    "fmt": "Street 200, Maadi as Sarayat Al Gharbeyah, Maadi, Cairo Governorate, Egypt"
+  },
+  "Road 250 Maadi": {
+    "lat": 29.9528273,
+    "lng": 31.2712295,
+    "fmt": "Street 250, Maadi as Sarayat Al Gharbeyah, Maadi, Cairo Governorate, Egypt"
+  },
+  "Street 100 Maadi": {
+    "lat": 29.95887,
+    "lng": 31.2548905,
+    "fmt": "Street 100, Maadi, Cairo Governorate, Egypt"
+  },
+  "Road 105 Maadi": {
+    "lat": 29.9595144,
+    "lng": 31.2589346,
+    "fmt": "Al Maadi, Maadi, Cairo Governorate, Egypt"
+  },
+  "Nasr Street Maadi": {
+    "lat": 29.975247,
+    "lng": 31.2803264,
+    "fmt": "ElNasr St, El Basatin, Cairo Governorate, Egypt"
+  },
+  "Road 18 Maadi": {
+    "lat": 29.9608929,
+    "lng": 31.2670983,
+    "fmt": "Street 18, Maadi as Sarayat Al Gharbeyah, Maadi, Cairo Governorate, Egypt"
+  },
+  "Road 233 Maadi": {
+    "lat": 29.9591704,
+    "lng": 31.278381,
+    "fmt": "Street 233, Maadi as Sarayat Al Gharbeyah, Maadi, Cairo Governorate, Egypt"
+  },
+  "Road 77 Maadi": {
+    "lat": 29.9647748,
+    "lng": 31.2608371,
+    "fmt": "Street 77, Cairo Governorate, Egypt"
+  },
+  "Road 151 Maadi": {
+    "lat": 29.9623469,
+    "lng": 31.2495364,
+    "fmt": "151، Maadi, Cairo Governorate, Egypt"
+  },
+  "90th Street New Cairo": {
+    "lat": 30.0122123,
+    "lng": 31.4430295,
+    "fmt": "Street 90, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "South 90 Street New Cairo": {
+    "lat": 30.0122123,
+    "lng": 31.4430295,
+    "fmt": "Street 90, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "North 90 Street New Cairo": {
+    "lat": 30.0308145,
+    "lng": 31.4664972,
+    "fmt": "N 90th Street - Service Ln, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "El Banafseg New Cairo": {
+    "lat": 30.0479751,
+    "lng": 31.465614,
+    "fmt": "El-Banafseg, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "El Yasmeen New Cairo": {
+    "lat": 30.04397519999999,
+    "lng": 31.4513314,
+    "fmt": "El Yasmeen, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "El Narges New Cairo": {
+    "lat": 30.00178,
+    "lng": 31.46123,
+    "fmt": "Al Narges, New Cairo 1, Cairo Governorate 4724310, Egypt"
+  },
+  "Teseen Street New Cairo": {
+    "lat": 30.0305576,
+    "lng": 31.4558848,
+    "fmt": "N Teseen St, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "El Lotus New Cairo": {
+    "lat": 30.0257855,
+    "lng": 31.5198716,
+    "fmt": "El-Lotus, New Cairo 1, Cairo Governorate, Egypt"
+  },
+  "El Choueifat New Cairo": {
+    "lat": 30.009505,
+    "lng": 31.409902,
+    "fmt": "El-Shouyfat, Al Hay Al Asher, Nasr City, Cairo Governorate, Egypt"
+  },
+  "First Settlement New Cairo": {
+    "lat": 30.0475582,
+    "lng": 31.5264284,
+    "fmt": "2GXG+2HF، ابو موسى الاشعري، New Cairo 1, Cairo Governorate 4752119, Egypt"
+  },
+  "Abbas El Akkad Street Nasr City": {
+    "lat": 30.0566673,
+    "lng": 31.3381326,
+    "fmt": "Abbas El-Akkad, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Makram Ebeid Street Nasr City": {
+    "lat": 30.0619739,
+    "lng": 31.3449857,
+    "fmt": "Makram Ebeid, Al Mintaqah as Sādisah, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Mostafa El Nahas Street Nasr City": {
+    "lat": 30.055138,
+    "lng": 31.346209,
+    "fmt": "Makram Ebeid St. & Mostafa Al Nahas St., Al Mintaqah as Sādisah, Nasr City, Cairo Governorate 4450401, Egypt"
+  },
+  "El Nasr Road Nasr City": {
+    "lat": 30.069221,
+    "lng": 31.3411786,
+    "fmt": "El-Nasr Rd, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Tayaran Street Nasr City": {
+    "lat": 30.0672172,
+    "lng": 31.3245531,
+    "fmt": "El Tayaran St, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Hassan El Maamoun Street Nasr City": {
+    "lat": 30.0670954,
+    "lng": 31.3569287,
+    "fmt": "بجوار مترو ماركت, Hassan Ma'moon, Al Hay as Sades, Nasr City, Cairo Governorate 4450476, Egypt"
+  },
+  "Youssef Abbas Street Nasr City": {
+    "lat": 30.0660025,
+    "lng": 31.3204459,
+    "fmt": "Youssef Abbas, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Anwar El Mofty Street Nasr City": {
+    "lat": 30.0665894,
+    "lng": 31.3306498,
+    "fmt": "Anwar Al Mofti, Al Manteqah Al Oula, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Abou Dawoud El Zahery Street Nasr City": {
+    "lat": 30.0589515,
+    "lng": 31.3415447,
+    "fmt": "Dawoud Housny, Al Mintaqah as Sādisah, Nasr City, Cairo Governorate, Egypt"
+  },
+  "Mohamed Hassanein Heikal Street Nasr City": {
+    "lat": 30.0589104,
+    "lng": 31.3412208,
+    "fmt": "Al Mintaqah as Sādisah, Nasr City, Cairo Governorate 4450311, Egypt"
+  },
+  "El Orouba Street Heliopolis": {
+    "lat": 30.0903232,
+    "lng": 31.3328952,
+    "fmt": "El-Orouba, Cairo Governorate, Egypt"
+  },
+  "Othman Ibn Affan Street Heliopolis": {
+    "lat": 30.09329,
+    "lng": 31.32534,
+    "fmt": "Othman Ibn Affan Street, Almazah, Heliopolis, Cairo Governorate 4460260, Egypt"
+  },
+  "Cleopatra Street Heliopolis": {
+    "lat": 30.0908829,
+    "lng": 31.3279889,
+    "fmt": "Cleopatra, Heliopolis, Cairo Governorate, Egypt"
+  },
+  "El Higaz Street Heliopolis": {
+    "lat": 30.1066921,
+    "lng": 31.3353404,
+    "fmt": "El Hegaz St, Cairo Governorate, Egypt"
+  },
+  "Baghdad Street Heliopolis": {
+    "lat": 30.0898094,
+    "lng": 31.3226234,
+    "fmt": "Baghdad St, El-Montaza, Heliopolis, Cairo Governorate, Egypt"
+  },
+  "El Merghany Street Heliopolis": {
+    "lat": 30.09047,
+    "lng": 31.34074,
+    "fmt": "El Marghany Street, Almazah, Heliopolis, Cairo Governorate 4461038, Egypt"
+  },
+  "Nozha Street Heliopolis": {
+    "lat": 30.0895619,
+    "lng": 31.3413473,
+    "fmt": "El-Nozha, Cairo Governorate, Egypt"
+  },
+  "Ibrahim El Lakkany Street Heliopolis": {
+    "lat": 30.0937599,
+    "lng": 31.3221243,
+    "fmt": "Ibrahim, El-Montaza, Heliopolis, Cairo Governorate, Egypt"
+  },
+  "Beirut Street Heliopolis": {
+    "lat": 30.0927873,
+    "lng": 31.3278359,
+    "fmt": "Beirut, Heliopolis, Cairo Governorate, Egypt"
+  },
+  "El Ahram Street Heliopolis": {
+    "lat": 30.0904,
+    "lng": 31.32015,
+    "fmt": "Al Ahram Street, El-Montaza, Heliopolis, Cairo Governorate 4460212, Egypt"
+  },
+  "El Obour City First District": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "El Obour City Third District": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "El Obour City Eighth District": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Gamal Abdel Nasser Axis El Obour": {
+    "lat": 30.1938086,
+    "lng": 31.4601614,
+    "fmt": "Al Obour City, Obour, Al-Qalyubia Governorate, Egypt"
+  },
+  "El Shabab Street El Obour": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Geish Road El Obour": {
+    "lat": 30.0997978,
+    "lng": 31.2641304,
+    "fmt": "El-Obour, El-Zawya El-Hamraa, El Zawya El Hamra, Cairo Governorate, Egypt"
+  },
+  "El Obour City Ninth District": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "El Obour City Fourth District": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Shubra Street": {
+    "lat": 30.085551,
+    "lng": 31.2453488,
+    "fmt": "Shobra, Cairo Governorate, Egypt"
+  },
+  "Khalusi Street Shubra": {
+    "lat": 30.085551,
+    "lng": 31.2453488,
+    "fmt": "Shobra, Cairo Governorate, Egypt"
+  },
+  "Ahmed Helmi Street Shubra": {
+    "lat": 30.0707411,
+    "lng": 31.2535157,
+    "fmt": "Emtedad Ahmed Helmi, Shubra, Cairo Governorate, Egypt"
+  },
+  "Rod El Farag Street": {
+    "lat": 30.0801631,
+    "lng": 31.2431366,
+    "fmt": "Rod Al Farag, Cairo Governorate, Egypt"
+  },
+  "El Khalafawy Street Shubra": {
+    "lat": 30.1003931,
+    "lng": 31.2449756,
+    "fmt": "268 Shobra, Asad, El Sahel, Cairo Governorate 4350228, Egypt"
+  },
+  "Masarra Street Shubra": {
+    "lat": 30.085551,
+    "lng": 31.2453488,
+    "fmt": "Shobra, Cairo Governorate, Egypt"
+  },
+  "Mosheer Ahmed Ismail Street Shubra": {
+    "lat": 30.0725361,
+    "lng": 31.24976,
+    "fmt": "Shubra, Cairo Governorate, Egypt"
+  },
+  "Bahtim Street Shubra": {
+    "lat": 30.085551,
+    "lng": 31.2453488,
+    "fmt": "Shobra, Cairo Governorate, Egypt"
+  },
+  "Shubra El Kheima Street": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "El Teraa El Boulaqeya Street": {
+    "lat": 30.08058,
+    "lng": 31.2519944,
+    "fmt": "الترعة البولاقية, الخازندارة, الساحل، محافظة القاهرة‬ 11341, Egypt"
+  },
+  "Hyper One Obour": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Carrefour Obour": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Golf City Obour": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Green Heights Compound Obour": {
+    "lat": 30.0444196,
+    "lng": 31.2357116,
+    "fmt": "Cairo, Cairo Governorate, Egypt"
+  },
+  "Obour City Club": {
+    "lat": 30.2516104,
+    "lng": 31.4969223,
+    "fmt": "Unnamed Road, 7F2W+JQV، العبور، محافظة القاهرة‬ 6362040, Egypt"
+  },
+  "Geel 2000 Street Obour": {
+    "lat": 30.0997978,
+    "lng": 31.2641304,
+    "fmt": "El-Obour, El-Zawya El-Hamraa, El Zawya El Hamra, Cairo Governorate, Egypt"
+  },
+  "Central Axis Obour": {
+    "lat": 30.0997978,
+    "lng": 31.2641304,
+    "fmt": "El-Obour, El-Zawya El-Hamraa, El Zawya El Hamra, Cairo Governorate, Egypt"
+  },
+  "Talaat Mostafa Obour": {
+    "lat": 30.056802,
+    "lng": 31.2637967,
+    "fmt": "Moustafa Talaat, As Sawabi, Bab El Sharia, Cairo Governorate, Egypt"
+  },
+  "El Obour Vegetable Market": {
+    "lat": 29.9753476,
+    "lng": 31.3057494,
+    "fmt": "X8G4+47Q, El-Basatin Sharkeya, El Basatin, Cairo Governorate 4235226, Egypt"
+  },
+  "Falaki Square": {
+    "lat": 30.0434632,
+    "lng": 31.2390731,
+    "fmt": "The Greek Campus، Falaki, 28 Al Falki, Ad Dawawin, Abdeen, Cairo Governorate 4280102, Egypt"
+  }
+}
