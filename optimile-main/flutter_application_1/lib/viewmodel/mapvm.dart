@@ -280,8 +280,18 @@ bool isFragile = false;
 
   // ================= LIVE ETA =================
   String nextStopEta = '';
+  String nextStopArrival = '';   // clock time of arrival at the next stop, e.g. "3:42 PM"
   String totalEta = '';
   String stopProgress = '';
+
+  /// Format a DateTime as a 12-hour clock time like "3:42 PM" (no intl dependency).
+  String _formatClock(DateTime t) {
+    final ampm = t.hour >= 12 ? 'PM' : 'AM';
+    int h12 = t.hour % 12;
+    if (h12 == 0) h12 = 12;
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '$h12:$mm $ampm';
+  }
 
   StreamSubscription<Position>? positionStream;
 
@@ -1299,6 +1309,8 @@ void addStop(
           // Update live ETA
           final durationSec = route['legs'][0]['duration']['value'] as int;
           nextStopEta = '${(durationSec / 60).round()} min';
+          nextStopArrival =
+              _formatClock(DateTime.now().add(Duration(seconds: durationSec)));
           _updateTotalEta();
 
           notifyListeners();
@@ -1338,6 +1350,7 @@ void clearRoute({bool keepCurrentLocationMarker = true}) {
   distance = '';
   duration = '';
   nextStopEta = '';
+  nextStopArrival = '';
   totalEta = '';
   stopProgress = '';
   activeVehicleEta = '';

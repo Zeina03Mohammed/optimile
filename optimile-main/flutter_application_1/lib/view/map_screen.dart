@@ -419,15 +419,15 @@ class _MapView extends StatelessWidget {
                           ],
                         ],
                       ),
-                      // Per-vehicle ETA
-                      if (vm.activeVehicleEta.isNotEmpty && vm.activeVehicleEta != '0.0 min') ...[
+                      // Live arrival clock time at the next stop
+                      if (vm.nextStopArrival.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Icon(Icons.local_shipping, size: 14, color: Colors.orange.shade700),
+                            Icon(Icons.schedule, size: 14, color: Colors.orange.shade700),
                             const SizedBox(width: 4),
                             Text(
-                              "Trip ETA: ${vm.activeVehicleEta}",
+                              "Arrives ${vm.nextStopArrival}",
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
